@@ -64,11 +64,13 @@ describe('renderTopSection', () => {
     expect(svg.getAttribute('viewBox')).toBeTruthy();
   });
 
-  it('contains structural elements (rects for frame profiles and layers)', () => {
+  it('contains structural elements (polygons for frame profiles, rects for layers)', () => {
     const svg = renderTopSection(doc, dims, formatInches);
     const rects = svg.querySelectorAll('rect');
-    // 2 frame profiles + glass + mat + backer = at least 5
-    expect(rects.length).toBeGreaterThanOrEqual(5);
+    const polys = svg.querySelectorAll('polygon');
+    // 2 frame profiles (polygons) + glass + mat + backer (rects) = at least 5 total
+    expect(rects.length).toBeGreaterThanOrEqual(3);
+    expect(polys.length).toBeGreaterThanOrEqual(2);
   });
 
   it('has layer labels', () => {
@@ -91,7 +93,10 @@ describe('renderSideSection', () => {
   it('contains structural elements', () => {
     const svg = renderSideSection(doc, dims, formatInches);
     const rects = svg.querySelectorAll('rect');
-    expect(rects.length).toBeGreaterThanOrEqual(5);
+    const polys = svg.querySelectorAll('polygon');
+    // 2 frame profiles (polygons) + glass + mat + backer (rects)
+    expect(rects.length).toBeGreaterThanOrEqual(3);
+    expect(polys.length).toBeGreaterThanOrEqual(2);
   });
 
   it('contains dimension lines', () => {

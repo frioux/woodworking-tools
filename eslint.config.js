@@ -8,7 +8,11 @@ export default [
         document: 'readonly',
         window: 'readonly',
         console: 'readonly',
-        parseFloat: 'readonly'
+        parseFloat: 'readonly',
+        URLSearchParams: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        history: 'readonly'
       }
     },
     rules: {

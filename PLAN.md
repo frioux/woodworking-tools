@@ -33,44 +33,37 @@ The form collects these values (all dimensions in inches, with sensible defaults
 |-----------|-------------|---------|
 | Canvas width | Full outer width of the artwork/canvas | 16 |
 | Canvas height | Full outer height of the artwork/canvas | 20 |
-| Image width | Width of the visible image (excluding mat margins) | 10 |
-| Top margin | Mat margin above the image | 3 |
-| Bottom margin | Mat margin below the image (traditionally larger) | 4 |
 | Frame width | Width of the frame molding profile | 1.5 |
 | Frame depth | Depth (thickness) of the frame molding | 0.75 |
 | Glass depth | Thickness of the glass/acrylic pane | 0.125 |
 | Backer depth | Thickness of the backer board | 0.125 |
 
 **Derived values** (calculated, displayed but not editable):
-- Left/right margin = (canvas width - image width) / 2
-- Image height = canvas height - top margin - bottom margin
-- Rabbet overlap per side = that side's margin (the frame rabbet covers the margin area of the canvas, leaving only the image visible)
 - Rabbet depth = glass depth + backer depth + 1/16" (extra clearance for framing nails)
-- Overall outer width = image width + 2 × frame width
-- Overall outer height = image height + 2 × frame width
-- Front visible opening = image width × image height
+- Overall outer width = canvas width + 2 × frame width
+- Overall outer height = canvas height + 2 × frame width
 - Miter-cut piece lengths (long edge, short edge — measured at the long point)
 
 ## Generated Diagrams (all SVG)
 
 ### 1. Front View (orthographic)
 - Looking straight at the frame from the front
-- Shows: outer frame rectangle, inner frame opening (rabbet), mat opening, image area
-- Dimension lines for: overall width, overall height, frame width, mat margins (top, bottom, left, right), image area
+- Shows: outer frame rectangle, inner frame opening (rabbet), canvas area
+- Dimension lines for: overall width, overall height, frame width, canvas dimensions
 
 ### 2. Top/Cross-Section View (orthographic)
 - A horizontal cross-section through the middle of the frame
-- Shows: frame molding profile (left and right), glass layer, mat/canvas, backer board
+- Shows: frame molding profile (left and right), glass layer, canvas, backer board
 - Dimension lines for: frame width, frame depth, glass depth, canvas thickness, backer depth, rabbet depth
 
 ### 3. Side/Cross-Section View (orthographic)
 - A vertical cross-section through the middle of the frame
-- Shows: frame molding profile (top and bottom), glass, mat/canvas, backer
-- Dimension lines for: same as top view but oriented vertically, plus top/bottom margin differences
+- Shows: frame molding profile (top and bottom), glass, canvas, backer
+- Dimension lines for: same as top view but oriented vertically
 
 ### 4. Isometric (3D) Projection
 - Exploded or assembled isometric view showing how the layers stack
-- Layers from front to back: frame, glass, mat/canvas, backer
+- Layers from front to back: frame, glass, canvas, backer
 - Uses standard isometric angles (30°) for the 3D projection
 - Color-coded layers for clarity
 
@@ -80,7 +73,7 @@ The form collects these values (all dimensions in inches, with sensible defaults
 - Each diagram lives in its own `<div>` container and scales responsively
 - Use `viewBox` on each SVG so diagrams scale to fit the container
 - Dimension lines rendered as SVG lines + text annotations
-- Color palette: muted woodworking tones (warm browns for frame, light blue for glass, cream for mat, gray for backer)
+- Color palette: muted woodworking tones (warm browns for frame, light blue for glass, cream for canvas, gray for backer)
 
 ## UI / UX
 
@@ -96,12 +89,10 @@ The form collects these values (all dimensions in inches, with sensible defaults
 Vitest runs the tests in a Node environment. The source JS files use plain functions that work in both browser and Node (via ESM imports).
 
 **`frame-math.test.js`** — exercises every calculation function:
-- Derived margins from canvas/image dimensions
-- Image height from canvas height minus margins
 - Rabbet depth = glass + backer + 1/16"
-- Outer dimensions = image dims + 2 × frame width
+- Outer dimensions = canvas dims + 2 × frame width
 - Miter-cut lengths (long point = outer dimension, short point = outer dimension - 2 × frame width)
-- Edge cases: zero margins, very small dimensions, asymmetric margins
+- Edge cases: very small dimensions
 
 **`frame-diagrams.test.js`** — verifies SVG output:
 - Each diagram function returns valid SVG (well-formed XML via linkedom or happy-dom)
@@ -143,7 +134,7 @@ The gh-pages deployment step copies only the site files (index.html, frame-desig
 ## Implementation Steps
 
 1. **Scaffold the site** — Create `index.html` (landing page with link to frame designer), `frame-designer/index.html` with the form and diagram containers, `style.css`
-2. **Implement `frame-math.js`** — Pure calculation functions: derive margins, overall dimensions, miter lengths, layer stack depths
+2. **Implement `frame-math.js`** — Pure calculation functions: derive overall dimensions, miter lengths, layer stack depths
 3. **Write `frame-math.test.js`** — Unit tests for all calculation functions
 4. **Implement `frame-diagrams.js`** — SVG generation functions for each of the 4 views
 5. **Write `frame-diagrams.test.js`** — Tests verifying valid SVG structure and correct elements

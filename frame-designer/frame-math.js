@@ -8,9 +8,6 @@
  * @param {object} params
  * @param {number} params.canvasWidth  - Full outer width of artwork/canvas
  * @param {number} params.canvasHeight - Full outer height of artwork/canvas
- * @param {number} params.imageWidth   - Visible image width (excluding mat margins)
- * @param {number} params.topMargin    - Mat margin above image
- * @param {number} params.bottomMargin - Mat margin below image
  * @param {number} params.frameWidth   - Frame molding profile width
  * @param {number} params.frameDepth   - Frame molding thickness
  * @param {number} params.glassDepth   - Glass/acrylic pane thickness
@@ -19,15 +16,10 @@
  */
 export function calculateFrame(params) {
   const {
-    canvasWidth, canvasHeight, imageWidth,
-    topMargin, bottomMargin,
+    canvasWidth, canvasHeight,
     frameWidth, frameDepth,
     glassDepth, backerDepth
   } = params;
-
-  const leftMargin = (canvasWidth - imageWidth) / 2;
-  const rightMargin = leftMargin;
-  const imageHeight = canvasHeight - topMargin - bottomMargin;
 
   // Rabbet depth = glass + backer + 1/16" clearance
   const rabbetDepth = glassDepth + backerDepth + 1 / 16;
@@ -46,15 +38,11 @@ export function calculateFrame(params) {
 
   return {
     // Input echo
-    canvasWidth, canvasHeight, imageWidth,
-    topMargin, bottomMargin,
+    canvasWidth, canvasHeight,
     frameWidth, frameDepth,
     glassDepth, backerDepth,
 
     // Derived
-    leftMargin,
-    rightMargin,
-    imageHeight,
     rabbetDepth,
     outerWidth,
     outerHeight,

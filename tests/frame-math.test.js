@@ -4,9 +4,6 @@ import { calculateFrame, formatInches } from '../frame-designer/frame-math.js';
 const defaults = {
   canvasWidth: 16,
   canvasHeight: 20,
-  imageWidth: 10,
-  topMargin: 3,
-  bottomMargin: 4,
   frameWidth: 1.5,
   frameDepth: 0.75,
   glassDepth: 0.125,
@@ -14,17 +11,6 @@ const defaults = {
 };
 
 describe('calculateFrame', () => {
-  it('calculates left/right margins from canvas and image width', () => {
-    const result = calculateFrame(defaults);
-    expect(result.leftMargin).toBe(3);
-    expect(result.rightMargin).toBe(3);
-  });
-
-  it('calculates image height from canvas height minus margins', () => {
-    const result = calculateFrame(defaults);
-    expect(result.imageHeight).toBe(13); // 20 - 3 - 4
-  });
-
   it('calculates rabbet depth = glass + backer + 1/16"', () => {
     const result = calculateFrame(defaults);
     expect(result.rabbetDepth).toBeCloseTo(0.3125); // 0.125 + 0.125 + 0.0625
@@ -48,45 +34,17 @@ describe('calculateFrame', () => {
     expect(result.miterShortVertical).toBe(20);   // outer - 2*frame = canvas height
   });
 
-  it('handles zero margins', () => {
-    const result = calculateFrame({
-      ...defaults,
-      topMargin: 0,
-      bottomMargin: 0,
-      imageWidth: 16 // full canvas width
-    });
-    expect(result.leftMargin).toBe(0);
-    expect(result.rightMargin).toBe(0);
-    expect(result.imageHeight).toBe(20);
-  });
-
   it('handles very small dimensions', () => {
     const result = calculateFrame({
       canvasWidth: 2,
       canvasHeight: 2,
-      imageWidth: 1,
-      topMargin: 0.25,
-      bottomMargin: 0.25,
       frameWidth: 0.5,
       frameDepth: 0.25,
       glassDepth: 0.0625,
       backerDepth: 0.0625
     });
-    expect(result.leftMargin).toBe(0.5);
-    expect(result.imageHeight).toBe(1.5);
     expect(result.outerWidth).toBe(3);   // 2 + 2*0.5
     expect(result.outerHeight).toBe(3);  // 2 + 2*0.5
-  });
-
-  it('handles asymmetric margins', () => {
-    const result = calculateFrame({
-      ...defaults,
-      topMargin: 2,
-      bottomMargin: 5
-    });
-    expect(result.imageHeight).toBe(13); // 20 - 2 - 5
-    expect(result.topMargin).toBe(2);
-    expect(result.bottomMargin).toBe(5);
   });
 });
 

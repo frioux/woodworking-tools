@@ -10,7 +10,7 @@ const COLORS = {
   frame: '#8B6914',
   frameDark: '#6B4F12',
   glass: '#B8D4E3',
-  mat: '#F5F0E0',
+  canvas: '#F5EED9',
   backer: '#9E9E9E',
   backerDark: '#757575',
   opening: '#FFFFFF',
@@ -153,19 +153,11 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Mat area (inside frame)
+  // Canvas opening (inside frame)
+  const canvasW = w - 2 * fw;
+  const canvasH = h - 2 * fw;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: fw, width: w - 2 * fw, height: h - 2 * fw,
-    fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
-  }));
-
-  // Image opening (offset by margins within the mat)
-  const imgW = dims.imageWidth * scale;
-  const imgH = dims.imageHeight * scale;
-  const imgX = fw + dims.leftMargin * scale;
-  const imgY = fw + dims.topMargin * scale;
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: imgX, y: imgY, width: imgW, height: imgH,
+    x: fw, y: fw, width: canvasW, height: canvasH,
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3
   }));
 
@@ -184,20 +176,20 @@ export function renderFrontView(doc, dims, fmt) {
 
   // Label
   const label = svgEl(doc, 'text', {
-    x: imgX + imgW / 2, y: imgY + imgH / 2,
+    x: fw + canvasW / 2, y: fw + canvasH / 2,
     'text-anchor': 'middle', fill: '#bbb',
     'font-size': 5, 'font-family': 'sans-serif'
   });
-  label.textContent = 'Image';
+  label.textContent = 'Canvas';
   svg.appendChild(label);
 
   // Dimension lines
   svg.appendChild(hDimension(doc, 0, w, 0, fmt(dims.outerWidth), true));
   svg.appendChild(vDimension(doc, 0, h, 0, fmt(dims.outerHeight), true));
   svg.appendChild(hDimension(doc, 0, fw, h, fmt(dims.frameWidth), false));
-  svg.appendChild(hDimension(doc, imgX, imgX + imgW, h, fmt(dims.imageWidth), false));
+  svg.appendChild(hDimension(doc, fw, fw + canvasW, h, fmt(dims.canvasWidth), false));
   svg.appendChild(vDimension(doc, 0, fw, w, fmt(dims.frameWidth), false));
-  svg.appendChild(vDimension(doc, imgY, imgY + imgH, w, fmt(dims.imageHeight), false));
+  svg.appendChild(vDimension(doc, fw, fw + canvasH, w, fmt(dims.canvasHeight), false));
 
   return svg;
 }
@@ -250,16 +242,16 @@ export function renderTopSection(doc, dims, fmt) {
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Mat/canvas layer
-  const matY = glassY + gd + 1;
-  const matD = 3;
+  // Canvas layer
+  const canvasY = glassY + gd + 1;
+  const canvasD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - lip, y: matY, width: w - 2 * fw + 2 * lip, height: matD,
-    fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
+    x: fw - lip, y: canvasY, width: w - 2 * fw + 2 * lip, height: canvasD,
+    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
   // Backer layer
-  const backerY = matY + matD + 1;
+  const backerY = canvasY + canvasD + 1;
   svg.appendChild(svgEl(doc, 'rect', {
     x: fw - lip, y: backerY, width: w - 2 * fw + 2 * lip, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
@@ -273,7 +265,7 @@ export function renderTopSection(doc, dims, fmt) {
 
   // Layer labels
   const labelX = w + 5;
-  for (const [text, y] of [['Glass', glassY + gd / 2], ['Canvas', matY + matD / 2], ['Backer', backerY + bd / 2]]) {
+  for (const [text, y] of [['Glass', glassY + gd / 2], ['Canvas', canvasY + canvasD / 2], ['Backer', backerY + bd / 2]]) {
     const t = svgEl(doc, 'text', {
       x: labelX, y: y + 2,
       fill: COLORS.dimension, 'font-size': 3.5, 'font-family': 'sans-serif'
@@ -331,16 +323,16 @@ export function renderSideSection(doc, dims, fmt) {
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Mat/canvas
-  const matX = glassX + gd + 1;
-  const matD = 3;
+  // Canvas
+  const canvasX = glassX + gd + 1;
+  const canvasD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: matX, y: fw - lip, width: matD, height: h - 2 * fw + 2 * lip,
-    fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
+    x: canvasX, y: fw - lip, width: canvasD, height: h - 2 * fw + 2 * lip,
+    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
   // Backer
-  const backerX = matX + matD + 1;
+  const backerX = canvasX + canvasD + 1;
   svg.appendChild(svgEl(doc, 'rect', {
     x: backerX, y: fw - lip, width: bd, height: h - 2 * fw + 2 * lip,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
@@ -425,11 +417,11 @@ export function renderIsometric(doc, dims, _fmt) {
     ow - 2 * fw, oh - 2 * fw, dims.backerDepth * 8,
     COLORS.backer, COLORS.backerDark));
 
-  // Canvas/mat layer
+  // Canvas layer
   const canvasZ = backerZ + dims.backerDepth * 8 + layerGap;
   svg.appendChild(isoRect(fw, fw, canvasZ,
     ow - 2 * fw, oh - 2 * fw, 2,
-    COLORS.mat, '#cba'));
+    COLORS.canvas, '#cba'));
 
   // Glass layer
   const glassZ = canvasZ + 2 + layerGap;

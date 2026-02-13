@@ -32,9 +32,9 @@ export function calculateFrame(params) {
   // Rabbet depth = glass + backer + 1/16" clearance
   const rabbetDepth = glassDepth + backerDepth + 1 / 16;
 
-  // Outer frame dimensions: image opening + frame molding on each side
-  const outerWidth = imageWidth + 2 * frameWidth;
-  const outerHeight = imageHeight + 2 * frameWidth;
+  // Outer frame dimensions: canvas + frame molding on each side
+  const outerWidth = canvasWidth + 2 * frameWidth;
+  const outerHeight = canvasHeight + 2 * frameWidth;
 
   // Miter-cut lengths measured at the long point
   const miterLengthHorizontal = outerWidth;

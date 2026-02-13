@@ -88,21 +88,22 @@ function validate(params) {
     valid = false;
   }
 
-  // Canvas must not extend past frame — each margin must fit within frame width
+  // Canvas must not extend past frame — frame must be at least 3/16" wider than margin
+  const minOverlap = 3 / 16;
   if (params.canvasWidth > 0 && params.imageWidth > 0 && params.frameWidth > 0) {
     const sideMargin = (params.canvasWidth - params.imageWidth) / 2;
-    if (sideMargin > params.frameWidth) {
-      setError('canvas-width', 'Canvas too wide — margins exceed frame width');
+    if (sideMargin > params.frameWidth - minOverlap) {
+      setError('canvas-width', 'Canvas too wide — frame must be at least 3/16" wider than margin');
       valid = false;
     }
   }
   if (params.canvasHeight > 0 && params.frameWidth > 0) {
-    if (params.topMargin > params.frameWidth) {
-      setError('top-margin', 'Top margin exceeds frame width');
+    if (params.topMargin > params.frameWidth - minOverlap) {
+      setError('top-margin', 'Top margin too large — frame must be at least 3/16" wider');
       valid = false;
     }
-    if (params.bottomMargin > params.frameWidth) {
-      setError('bottom-margin', 'Bottom margin exceeds frame width');
+    if (params.bottomMargin > params.frameWidth - minOverlap) {
+      setError('bottom-margin', 'Bottom margin too large — frame must be at least 3/16" wider');
       valid = false;
     }
   }

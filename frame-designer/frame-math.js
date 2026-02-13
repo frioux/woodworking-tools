@@ -8,6 +8,9 @@
  * @param {object} params
  * @param {number} params.canvasWidth  - Full outer width of artwork/canvas
  * @param {number} params.canvasHeight - Full outer height of artwork/canvas
+ * @param {number} params.imageWidth   - Visible image width (excluding margins)
+ * @param {number} params.topMargin    - Margin above image
+ * @param {number} params.bottomMargin - Margin below image
  * @param {number} params.frameWidth   - Frame molding profile width
  * @param {number} params.frameDepth   - Frame molding thickness
  * @param {number} params.glassDepth   - Glass/acrylic pane thickness
@@ -16,17 +19,22 @@
  */
 export function calculateFrame(params) {
   const {
-    canvasWidth, canvasHeight,
+    canvasWidth, canvasHeight, imageWidth,
+    topMargin, bottomMargin,
     frameWidth, frameDepth,
     glassDepth, backerDepth
   } = params;
 
+  const leftMargin = (canvasWidth - imageWidth) / 2;
+  const rightMargin = leftMargin;
+  const imageHeight = canvasHeight - topMargin - bottomMargin;
+
   // Rabbet depth = glass + backer + 1/16" clearance
   const rabbetDepth = glassDepth + backerDepth + 1 / 16;
 
-  // Outer frame dimensions based on canvas + frame molding
-  const outerWidth = canvasWidth + 2 * frameWidth;
-  const outerHeight = canvasHeight + 2 * frameWidth;
+  // Outer frame dimensions based on image + frame molding
+  const outerWidth = imageWidth + 2 * frameWidth;
+  const outerHeight = imageHeight + 2 * frameWidth;
 
   // Miter-cut lengths measured at the long point
   const miterLengthHorizontal = outerWidth;
@@ -38,11 +46,15 @@ export function calculateFrame(params) {
 
   return {
     // Input echo
-    canvasWidth, canvasHeight,
+    canvasWidth, canvasHeight, imageWidth,
+    topMargin, bottomMargin,
     frameWidth, frameDepth,
     glassDepth, backerDepth,
 
     // Derived
+    leftMargin,
+    rightMargin,
+    imageHeight,
     rabbetDepth,
     outerWidth,
     outerHeight,

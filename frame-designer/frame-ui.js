@@ -2,14 +2,16 @@ import { calculateFrame, formatInches } from './frame-math.js';
 import { renderFrontView, renderTopSection, renderSideSection, renderIsometric } from './frame-diagrams.js';
 
 const INPUT_IDS = [
-  'canvas-width', 'canvas-height',
+  'canvas-width', 'canvas-height', 'image-width',
+  'top-margin', 'bottom-margin',
   'frame-width', 'frame-depth',
   'glass-depth', 'backer-depth'
 ];
 
 // Short keys for URL params (keeps URLs compact)
 const URL_KEYS = {
-  'canvas-width': 'cw', 'canvas-height': 'ch',
+  'canvas-width': 'cw', 'canvas-height': 'ch', 'image-width': 'iw',
+  'top-margin': 'tm', 'bottom-margin': 'bm',
   'frame-width': 'fw', 'frame-depth': 'fd',
   'glass-depth': 'gd', 'backer-depth': 'bd'
 };
@@ -21,6 +23,9 @@ function readInputs() {
   return {
     canvasWidth: parseFloat(document.getElementById('canvas-width').value) || 0,
     canvasHeight: parseFloat(document.getElementById('canvas-height').value) || 0,
+    imageWidth: parseFloat(document.getElementById('image-width').value) || 0,
+    topMargin: parseFloat(document.getElementById('top-margin').value) || 0,
+    bottomMargin: parseFloat(document.getElementById('bottom-margin').value) || 0,
     frameWidth: parseFloat(document.getElementById('frame-width').value) || 0,
     frameDepth: parseFloat(document.getElementById('frame-depth').value) || 0,
     glassDepth: parseFloat(document.getElementById('glass-depth').value) || 0,
@@ -61,12 +66,25 @@ function validate(params) {
     setError('canvas-height', 'Must be positive');
     valid = false;
   }
+  if (params.imageWidth <= 0) {
+    setError('image-width', 'Must be positive');
+    valid = false;
+  } else if (params.imageWidth > params.canvasWidth) {
+    setError('image-width', 'Exceeds canvas width');
+    valid = false;
+  }
   if (params.frameWidth <= 0) {
     setError('frame-width', 'Must be positive');
     valid = false;
   }
   if (params.frameDepth <= 0) {
     setError('frame-depth', 'Must be positive');
+    valid = false;
+  }
+
+  if (params.canvasHeight > 0 && params.topMargin + params.bottomMargin >= params.canvasHeight) {
+    setError('top-margin', 'Top + bottom margins must be less than canvas height');
+    setError('bottom-margin', 'Top + bottom margins must be less than canvas height');
     valid = false;
   }
 
@@ -201,6 +219,8 @@ function renderCutList(dims) {
   dl.className = 'derived-values';
 
   const items = [
+    ['Left / right margin', formatInches(dims.leftMargin)],
+    ['Image height', formatInches(dims.imageHeight)],
     ['Outer width', formatInches(dims.outerWidth)],
     ['Outer height', formatInches(dims.outerHeight)],
     ['Rabbet depth', formatInches(dims.rabbetDepth)]
@@ -243,6 +263,7 @@ function update(updateURL = true) {
   if (!validate(params)) return;
 
   const dims = calculateFrame(params);
+  if (dims.imageHeight <= 0) return;
 
   renderCutList(dims);
   renderDiagrams(dims);

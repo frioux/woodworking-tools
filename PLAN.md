@@ -33,23 +33,29 @@ The form collects these values (all dimensions in inches, with sensible defaults
 |-----------|-------------|---------|
 | Canvas width | Full outer width of the artwork/canvas | 16 |
 | Canvas height | Full outer height of the artwork/canvas | 20 |
+| Image width | Width of the visible image (excluding margins) | 10 |
+| Top margin | Margin above the image | 3 |
+| Bottom margin | Margin below the image (traditionally larger) | 4 |
 | Frame width | Width of the frame molding profile | 1.5 |
 | Frame depth | Depth (thickness) of the frame molding | 0.75 |
 | Glass depth | Thickness of the glass/acrylic pane | 0.125 |
 | Backer depth | Thickness of the backer board | 0.125 |
 
 **Derived values** (calculated, displayed but not editable):
+- Left/right margin = (canvas width - image width) / 2
+- Image height = canvas height - top margin - bottom margin
 - Rabbet depth = glass depth + backer depth + 1/16" (extra clearance for framing nails)
-- Overall outer width = canvas width + 2 × frame width
-- Overall outer height = canvas height + 2 × frame width
+- Overall outer width = image width + 2 × frame width
+- Overall outer height = image height + 2 × frame width
+- Front visible opening = image width × image height
 - Miter-cut piece lengths (long edge, short edge — measured at the long point)
 
 ## Generated Diagrams (all SVG)
 
 ### 1. Front View (orthographic)
 - Looking straight at the frame from the front
-- Shows: outer frame rectangle, inner frame opening (rabbet), canvas area
-- Dimension lines for: overall width, overall height, frame width, canvas dimensions
+- Shows: outer frame rectangle, inner frame opening (rabbet), canvas margin area, image opening
+- Dimension lines for: overall width, overall height, frame width, margins, image area
 
 ### 2. Top/Cross-Section View (orthographic)
 - A horizontal cross-section through the middle of the frame
@@ -59,7 +65,7 @@ The form collects these values (all dimensions in inches, with sensible defaults
 ### 3. Side/Cross-Section View (orthographic)
 - A vertical cross-section through the middle of the frame
 - Shows: frame molding profile (top and bottom), glass, canvas, backer
-- Dimension lines for: same as top view but oriented vertically
+- Dimension lines for: same as top view but oriented vertically, plus top/bottom margin differences
 
 ### 4. Isometric (3D) Projection
 - Exploded or assembled isometric view showing how the layers stack
@@ -89,10 +95,12 @@ The form collects these values (all dimensions in inches, with sensible defaults
 Vitest runs the tests in a Node environment. The source JS files use plain functions that work in both browser and Node (via ESM imports).
 
 **`frame-math.test.js`** — exercises every calculation function:
+- Derived margins from canvas/image dimensions
+- Image height from canvas height minus margins
 - Rabbet depth = glass + backer + 1/16"
-- Outer dimensions = canvas dims + 2 × frame width
+- Outer dimensions = image dims + 2 × frame width
 - Miter-cut lengths (long point = outer dimension, short point = outer dimension - 2 × frame width)
-- Edge cases: very small dimensions
+- Edge cases: zero margins, very small dimensions, asymmetric margins
 
 **`frame-diagrams.test.js`** — verifies SVG output:
 - Each diagram function returns valid SVG (well-formed XML via linkedom or happy-dom)
@@ -134,7 +142,7 @@ The gh-pages deployment step copies only the site files (index.html, frame-desig
 ## Implementation Steps
 
 1. **Scaffold the site** — Create `index.html` (landing page with link to frame designer), `frame-designer/index.html` with the form and diagram containers, `style.css`
-2. **Implement `frame-math.js`** — Pure calculation functions: derive overall dimensions, miter lengths, layer stack depths
+2. **Implement `frame-math.js`** — Pure calculation functions: derive margins, overall dimensions, miter lengths, layer stack depths
 3. **Write `frame-math.test.js`** — Unit tests for all calculation functions
 4. **Implement `frame-diagrams.js`** — SVG generation functions for each of the 4 views
 5. **Write `frame-diagrams.test.js`** — Tests verifying valid SVG structure and correct elements

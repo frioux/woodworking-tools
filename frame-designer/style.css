@@ -143,6 +143,14 @@ header a:hover { color: #fff; }
   font-weight: normal;
   font-size: 0.8rem;
 }
+.cut-list .section-heading {
+  font-size: 0.95rem;
+  color: #5c3d2e;
+  margin: 1rem 0 0.5rem;
+}
+.cut-list .section-heading:first-child {
+  margin-top: 0;
+}
 .derived-values dt {
   font-size: 0.8rem;
   color: #7a5c4f;

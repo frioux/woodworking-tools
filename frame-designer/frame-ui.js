@@ -94,6 +94,60 @@ function renderCutList(dims) {
   const container = document.getElementById('cut-list-content');
   container.innerHTML = '';
 
+  // --- Cut List ---
+  const cutHeading = document.createElement('h3');
+  cutHeading.className = 'section-heading';
+  cutHeading.textContent = 'Cut List';
+  container.appendChild(cutHeading);
+
+  const cutTable = document.createElement('table');
+  cutTable.innerHTML = `
+    <thead><tr><th>Piece</th><th>Qty</th><th>Length</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Horizontal rails</td>
+        <td>2</td>
+        <td>${formatInches(dims.miterLengthHorizontal)}</td>
+      </tr>
+      <tr>
+        <td>Vertical rails</td>
+        <td>2</td>
+        <td>${formatInches(dims.miterLengthVertical)}</td>
+      </tr>
+    </tbody>
+  `;
+  container.appendChild(cutTable);
+
+  // --- Miter Values ---
+  const miterHeading = document.createElement('h3');
+  miterHeading.className = 'section-heading';
+  miterHeading.textContent = 'Miter Values';
+  container.appendChild(miterHeading);
+
+  const miterTable = document.createElement('table');
+  miterTable.innerHTML = `
+    <thead><tr><th>Piece</th><th>Long Point</th><th>Short Point</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Horizontal</td>
+        <td>${formatInches(dims.miterLengthHorizontal)}</td>
+        <td>${formatInches(dims.miterShortHorizontal)}</td>
+      </tr>
+      <tr>
+        <td>Vertical</td>
+        <td>${formatInches(dims.miterLengthVertical)}</td>
+        <td>${formatInches(dims.miterShortVertical)}</td>
+      </tr>
+    </tbody>
+  `;
+  container.appendChild(miterTable);
+
+  // --- Calculated Dimensions ---
+  const dimsHeading = document.createElement('h3');
+  dimsHeading.className = 'section-heading';
+  dimsHeading.textContent = 'Calculated Dimensions';
+  container.appendChild(dimsHeading);
+
   const dl = document.createElement('dl');
   dl.className = 'derived-values';
 
@@ -114,32 +168,6 @@ function renderCutList(dims) {
     dl.appendChild(dd);
   }
   container.appendChild(dl);
-
-  // Cut list table
-  const h3 = document.createElement('h3');
-  h3.textContent = 'Miter Cuts';
-  h3.style.cssText = 'font-size:0.95rem;color:#5c3d2e;margin:1rem 0 0.5rem;';
-  container.appendChild(h3);
-
-  const table = document.createElement('table');
-  table.innerHTML = `
-    <thead><tr><th>Piece</th><th>Qty</th><th>Long Point</th><th>Short Point</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Horizontal rails</td>
-        <td>2</td>
-        <td>${formatInches(dims.miterLengthHorizontal)}</td>
-        <td>${formatInches(dims.miterShortHorizontal)}</td>
-      </tr>
-      <tr>
-        <td>Vertical rails</td>
-        <td>2</td>
-        <td>${formatInches(dims.miterLengthVertical)}</td>
-        <td>${formatInches(dims.miterShortVertical)}</td>
-      </tr>
-    </tbody>
-  `;
-  container.appendChild(table);
 }
 
 function renderDiagrams(dims) {

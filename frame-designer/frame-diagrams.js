@@ -153,11 +153,19 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Canvas opening (inside frame)
-  const canvasW = w - 2 * fw;
-  const canvasH = h - 2 * fw;
+  // Canvas area (inside frame)
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: fw, width: canvasW, height: canvasH,
+    x: fw, y: fw, width: w - 2 * fw, height: h - 2 * fw,
+    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
+  }));
+
+  // Image opening (offset by margins within the canvas)
+  const imgW = dims.imageWidth * scale;
+  const imgH = dims.imageHeight * scale;
+  const imgX = fw + dims.leftMargin * scale;
+  const imgY = fw + dims.topMargin * scale;
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: imgX, y: imgY, width: imgW, height: imgH,
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3
   }));
 
@@ -176,20 +184,20 @@ export function renderFrontView(doc, dims, fmt) {
 
   // Label
   const label = svgEl(doc, 'text', {
-    x: fw + canvasW / 2, y: fw + canvasH / 2,
+    x: imgX + imgW / 2, y: imgY + imgH / 2,
     'text-anchor': 'middle', fill: '#bbb',
     'font-size': 5, 'font-family': 'sans-serif'
   });
-  label.textContent = 'Canvas';
+  label.textContent = 'Image';
   svg.appendChild(label);
 
   // Dimension lines
   svg.appendChild(hDimension(doc, 0, w, 0, fmt(dims.outerWidth), true));
   svg.appendChild(vDimension(doc, 0, h, 0, fmt(dims.outerHeight), true));
   svg.appendChild(hDimension(doc, 0, fw, h, fmt(dims.frameWidth), false));
-  svg.appendChild(hDimension(doc, fw, fw + canvasW, h, fmt(dims.canvasWidth), false));
+  svg.appendChild(hDimension(doc, imgX, imgX + imgW, h, fmt(dims.imageWidth), false));
   svg.appendChild(vDimension(doc, 0, fw, w, fmt(dims.frameWidth), false));
-  svg.appendChild(vDimension(doc, fw, fw + canvasH, w, fmt(dims.canvasHeight), false));
+  svg.appendChild(vDimension(doc, imgY, imgY + imgH, w, fmt(dims.imageHeight), false));
 
   return svg;
 }

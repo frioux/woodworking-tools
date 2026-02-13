@@ -6,6 +6,9 @@ import { renderFrontView, renderTopSection, renderSideSection, renderIsometric }
 const defaults = {
   canvasWidth: 16,
   canvasHeight: 20,
+  imageWidth: 10,
+  topMargin: 3,
+  bottomMargin: 4,
   frameWidth: 1.5,
   frameDepth: 0.75,
   glassDepth: 0.125,
@@ -28,10 +31,10 @@ describe('renderFrontView', () => {
     expect(svg.getAttribute('viewBox')).toBeTruthy();
   });
 
-  it('contains rect elements for frame and canvas opening', () => {
+  it('contains rect elements for frame, canvas area, and image opening', () => {
     const svg = renderFrontView(doc, dims, formatInches);
     const rects = svg.querySelectorAll('rect');
-    expect(rects.length).toBeGreaterThanOrEqual(2);
+    expect(rects.length).toBeGreaterThanOrEqual(3);
   });
 
   it('contains dimension text labels', () => {
@@ -48,7 +51,7 @@ describe('renderFrontView', () => {
 
   it('changes output when dimensions change', () => {
     const svg1 = renderFrontView(doc, dims, formatInches);
-    const dims2 = calculateFrame({ ...defaults, canvasWidth: 12 });
+    const dims2 = calculateFrame({ ...defaults, imageWidth: 12 });
     const svg2 = renderFrontView(doc, dims2, formatInches);
     expect(svg1.outerHTML).not.toBe(svg2.outerHTML);
   });

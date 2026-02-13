@@ -3,9 +3,10 @@ name: CI
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -42,3 +43,11 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  delete-merged-branch:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${{ github.event.pull_request.head.ref }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

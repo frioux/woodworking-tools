@@ -120,7 +120,7 @@ function createDefs(doc) {
     const marker = svgEl(doc, 'marker', {
       id: a.id, markerWidth: 6, markerHeight: 6,
       refX: a.refX ?? 0, refY: a.refY ?? 1.5,
-      orient: 'auto', markerUnits: 'userSpaceOnUse'
+      markerUnits: 'userSpaceOnUse'
     });
     marker.appendChild(svgEl(doc, 'path', {
       d: a.path, fill: COLORS.dimLine

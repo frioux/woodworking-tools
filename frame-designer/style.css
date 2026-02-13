@@ -81,6 +81,9 @@ header a:hover { color: #fff; }
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .stepper:active {
   background: #e8ddd2;
@@ -187,5 +190,11 @@ header a:hover { color: #fff; }
   }
   .diagrams {
     grid-template-columns: 1fr;
+  }
+  .stepper {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.25rem;
+    border-radius: 6px;
   }
 }

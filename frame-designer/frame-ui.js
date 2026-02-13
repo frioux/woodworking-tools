@@ -188,15 +188,21 @@ for (const id of INPUT_IDS) {
 }
 
 // Wire up stepper buttons (use native stepUp/stepDown)
+function activateStepper(btn) {
+  const input = document.getElementById(btn.dataset.for);
+  if (btn.dataset.dir === 'up') {
+    input.stepUp();
+  } else {
+    input.stepDown();
+  }
+  input.dispatchEvent(new Event('input'));
+}
+
 for (const btn of document.querySelectorAll('.stepper')) {
-  btn.addEventListener('click', () => {
-    const input = document.getElementById(btn.dataset.for);
-    if (btn.dataset.dir === 'up') {
-      input.stepUp();
-    } else {
-      input.stepDown();
-    }
-    input.dispatchEvent(new Event('input'));
+  btn.addEventListener('click', () => activateStepper(btn));
+  btn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    activateStepper(btn);
   });
 }
 

@@ -30,16 +30,17 @@ The form collects these values (all dimensions in inches, with sensible defaults
 | Bottom margin | Mat margin below the image (traditionally larger) | 4 |
 | Frame width | Width of the frame molding profile | 1.5 |
 | Frame depth | Depth (thickness) of the frame molding | 0.75 |
-| Rabbet width | How far the rabbet lip overlaps the canvas on each side | 0.375 |
 | Glass depth | Thickness of the glass/acrylic pane | 0.125 |
 | Backer depth | Thickness of the backer board | 0.125 |
 
 **Derived values** (calculated, displayed but not editable):
 - Left/right margin = (canvas width - image width) / 2
+- Image height = canvas height - top margin - bottom margin
+- Rabbet overlap per side = that side's margin (the frame rabbet covers the margin area of the canvas, leaving only the image visible)
 - Rabbet depth = glass depth + backer depth + 1/16" (extra clearance for framing nails)
-- Overall outer width = canvas width - 2 × rabbet width + 2 × frame width (rabbet overlaps the canvas edge, so the frame extends from the inner visible edge, not the canvas edge)
-- Overall outer height = canvas height - 2 × rabbet width + 2 × frame width
-- Front visible opening = canvas size - 2 × rabbet width (the rabbet lip covers this much of the canvas on each side)
+- Overall outer width = image width + 2 × frame width
+- Overall outer height = image height + 2 × frame width
+- Front visible opening = image width × image height
 - Miter-cut piece lengths (long edge, short edge — measured at the long point)
 
 ## Generated Diagrams (all SVG)

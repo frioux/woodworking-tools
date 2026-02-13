@@ -12,7 +12,8 @@ export default [
         URLSearchParams: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
-        history: 'readonly'
+        history: 'readonly',
+        Event: 'readonly'
       }
     },
     rules: {

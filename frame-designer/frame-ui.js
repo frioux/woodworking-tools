@@ -187,6 +187,19 @@ for (const id of INPUT_IDS) {
   document.getElementById(id).addEventListener('input', update);
 }
 
+// Wire up stepper buttons (use native stepUp/stepDown)
+for (const btn of document.querySelectorAll('.stepper')) {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.for);
+    if (btn.dataset.dir === 'up') {
+      input.stepUp();
+    } else {
+      input.stepDown();
+    }
+    input.dispatchEvent(new Event('input'));
+  });
+}
+
 // Handle back/forward navigation
 window.addEventListener('popstate', onPopState);
 

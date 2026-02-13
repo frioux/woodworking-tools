@@ -60,11 +60,30 @@ header a:hover { color: #fff; }
 .input-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 .input-row input {
   flex: 1;
   min-width: 0;
+}
+.stepper {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  background: #faf8f5;
+  color: #7a5c4f;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stepper:active {
+  background: #e8ddd2;
 }
 .imperial {
   flex-shrink: 0;

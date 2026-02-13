@@ -159,11 +159,11 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Image opening
-  const imgX = fw;
-  const imgY = fw;
+  // Image opening (offset by margins within the mat)
   const imgW = dims.imageWidth * scale;
   const imgH = dims.imageHeight * scale;
+  const imgX = fw + dims.leftMargin * scale;
+  const imgY = fw + dims.topMargin * scale;
   svg.appendChild(svgEl(doc, 'rect', {
     x: imgX, y: imgY, width: imgW, height: imgH,
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3
@@ -195,9 +195,9 @@ export function renderFrontView(doc, dims, fmt) {
   svg.appendChild(hDimension(doc, 0, w, 0, fmt(dims.outerWidth), true));
   svg.appendChild(vDimension(doc, 0, h, 0, fmt(dims.outerHeight), true));
   svg.appendChild(hDimension(doc, 0, fw, h, fmt(dims.frameWidth), false));
-  svg.appendChild(hDimension(doc, fw, fw + imgW, h, fmt(dims.imageWidth), false));
+  svg.appendChild(hDimension(doc, imgX, imgX + imgW, h, fmt(dims.imageWidth), false));
   svg.appendChild(vDimension(doc, 0, fw, w, fmt(dims.frameWidth), false));
-  svg.appendChild(vDimension(doc, fw, fw + imgH, w, fmt(dims.imageHeight), false));
+  svg.appendChild(vDimension(doc, imgY, imgY + imgH, w, fmt(dims.imageHeight), false));
 
   return svg;
 }

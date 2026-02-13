@@ -33,6 +33,73 @@ function readInputs() {
   };
 }
 
+// --- Validation UI ---
+
+function clearAllErrors() {
+  for (const id of INPUT_IDS) {
+    const group = document.getElementById(id).closest('.form-group');
+    group.classList.remove('has-error');
+    const errorSpan = document.getElementById(`error-${id}`);
+    if (errorSpan) errorSpan.textContent = '';
+  }
+}
+
+function setError(inputId, message) {
+  const group = document.getElementById(inputId).closest('.form-group');
+  group.classList.add('has-error');
+  const errorSpan = document.getElementById(`error-${inputId}`);
+  if (errorSpan) errorSpan.textContent = message;
+}
+
+/**
+ * Validate inputs and set error UI. Returns true if all valid.
+ */
+function validate(params) {
+  clearAllErrors();
+  let valid = true;
+
+  if (params.canvasWidth <= 0) {
+    setError('canvas-width', 'Must be positive');
+    valid = false;
+  }
+  if (params.canvasHeight <= 0) {
+    setError('canvas-height', 'Must be positive');
+    valid = false;
+  }
+  if (params.imageWidth <= 0) {
+    setError('image-width', 'Must be positive');
+    valid = false;
+  } else if (params.imageWidth > params.canvasWidth) {
+    setError('image-width', 'Exceeds canvas width');
+    valid = false;
+  }
+  if (params.frameWidth <= 0) {
+    setError('frame-width', 'Must be positive');
+    valid = false;
+  }
+  if (params.frameDepth <= 0) {
+    setError('frame-depth', 'Must be positive');
+    valid = false;
+  }
+
+  if (params.canvasHeight > 0 && params.topMargin + params.bottomMargin >= params.canvasHeight) {
+    setError('top-margin', 'Top + bottom margins must be less than canvas height');
+    setError('bottom-margin', 'Top + bottom margins must be less than canvas height');
+    valid = false;
+  }
+
+  // Check rabbet depth vs frame depth (glass + backer + 1/16" clearance must fit)
+  if (params.frameDepth > 0) {
+    const rabbetDepth = params.glassDepth + params.backerDepth + 1 / 16;
+    if (rabbetDepth > params.frameDepth) {
+      setError('frame-depth', 'Too shallow for glass + backer + 1/16" clearance');
+      valid = false;
+    }
+  }
+
+  return valid;
+}
+
 function updateImperialDisplays() {
   for (const id of INPUT_IDS) {
     const input = document.getElementById(id);
@@ -165,13 +232,7 @@ function update(updateURL = true) {
 
   const params = readInputs();
 
-  // Basic validation: all values must be positive (margins can be zero)
-  if (params.canvasWidth <= 0 || params.canvasHeight <= 0 ||
-      params.imageWidth <= 0 || params.frameWidth <= 0 || params.frameDepth <= 0) {
-    return;
-  }
-  if (params.imageWidth > params.canvasWidth) return;
-  if (params.topMargin + params.bottomMargin >= params.canvasHeight) return;
+  if (!validate(params)) return;
 
   const dims = calculateFrame(params);
   if (dims.imageHeight <= 0) return;

@@ -30,22 +30,22 @@ describe('calculateFrame', () => {
     expect(result.rabbetDepth).toBeCloseTo(0.3125); // 0.125 + 0.125 + 0.0625
   });
 
-  it('calculates outer dimensions = canvas dims + 2 * frame width', () => {
+  it('calculates outer dimensions = image dims + 2 * frame width', () => {
     const result = calculateFrame(defaults);
-    expect(result.outerWidth).toBe(19);  // 16 + 2*1.5
-    expect(result.outerHeight).toBe(23); // 20 + 2*1.5
+    expect(result.outerWidth).toBe(13);  // 10 + 2*1.5
+    expect(result.outerHeight).toBe(16); // 13 + 2*1.5
   });
 
   it('calculates miter-cut long point lengths', () => {
     const result = calculateFrame(defaults);
-    expect(result.miterLengthHorizontal).toBe(19); // same as outer width
-    expect(result.miterLengthVertical).toBe(23);   // same as outer height
+    expect(result.miterLengthHorizontal).toBe(13); // same as outer width
+    expect(result.miterLengthVertical).toBe(16);   // same as outer height
   });
 
   it('calculates miter-cut short point lengths', () => {
     const result = calculateFrame(defaults);
-    expect(result.miterShortHorizontal).toBe(16); // outer - 2*frame = canvas width
-    expect(result.miterShortVertical).toBe(20);   // outer - 2*frame = canvas height
+    expect(result.miterShortHorizontal).toBe(10); // outer - 2*frame = image width
+    expect(result.miterShortVertical).toBe(13);   // outer - 2*frame = image height
   });
 
   it('handles zero margins', () => {
@@ -74,8 +74,8 @@ describe('calculateFrame', () => {
     });
     expect(result.leftMargin).toBe(0.5);
     expect(result.imageHeight).toBe(1.5);
-    expect(result.outerWidth).toBe(3);   // 2 + 2*0.5
-    expect(result.outerHeight).toBe(3);   // 2 + 2*0.5
+    expect(result.outerWidth).toBe(2);    // 1 + 2*0.5
+    expect(result.outerHeight).toBe(2.5); // 1.5 + 2*0.5
   });
 
   it('handles asymmetric margins', () => {

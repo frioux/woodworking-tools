@@ -1,0 +1,18 @@
+{
+  "name": "woodworking-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint frame-designer/ tests/ && html-validate index.html frame-designer/index.html",
+    "lint:fix": "eslint --fix frame-designer/ tests/"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "happy-dom": "^15.0.0",
+    "html-validate": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

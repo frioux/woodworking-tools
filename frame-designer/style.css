@@ -1,0 +1,155 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #f5f0eb;
+  color: #3b2f2f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  background: #5c3d2e;
+  color: #f5f0eb;
+  padding: 1rem 1.5rem;
+}
+header h1 { font-size: 1.5rem; }
+header a {
+  color: #d4c4b0;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+header a:hover { color: #fff; }
+
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- Form panel --- */
+.form-panel {
+  flex: 0 0 320px;
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  align-self: flex-start;
+  position: sticky;
+  top: 1rem;
+}
+.form-panel h2 {
+  font-size: 1.1rem;
+  color: #5c3d2e;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.5rem;
+}
+.form-group {
+  margin-bottom: 0.75rem;
+}
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: #7a5c4f;
+  margin-bottom: 0.2rem;
+}
+.form-group input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #3b2f2f;
+  background: #faf8f5;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: #a0845e;
+  box-shadow: 0 0 0 2px rgba(160, 132, 94, 0.2);
+}
+
+/* --- Cut list --- */
+.cut-list {
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  flex: 0 0 320px;
+  align-self: flex-start;
+}
+.cut-list h2 {
+  font-size: 1.1rem;
+  color: #5c3d2e;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.5rem;
+}
+.cut-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.cut-list th, .cut-list td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e8ddd2;
+}
+.cut-list th {
+  color: #7a5c4f;
+  font-weight: normal;
+  font-size: 0.8rem;
+}
+.derived-values dt {
+  font-size: 0.8rem;
+  color: #7a5c4f;
+  margin-top: 0.5rem;
+}
+.derived-values dd {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: #5c3d2e;
+}
+
+/* --- Diagram area --- */
+.diagrams {
+  flex: 1 1 600px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+.diagram-card {
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.diagram-card h3 {
+  font-size: 0.95rem;
+  color: #5c3d2e;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.4rem;
+}
+.diagram-card svg {
+  width: 100%;
+  height: auto;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  .form-panel, .cut-list {
+    flex: 1 1 auto;
+    position: static;
+  }
+  .diagrams {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Woodworking Tools</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #f5f0eb;
+      color: #3b2f2f;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #5c3d2e;
+    }
+    p.subtitle {
+      font-size: 1.1rem;
+      color: #7a5c4f;
+      margin-bottom: 2rem;
+    }
+    .tool-list {
+      list-style: none;
+      max-width: 600px;
+      width: 100%;
+    }
+    .tool-list a {
+      display: block;
+      background: #fff;
+      border: 1px solid #d4c4b0;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      text-decoration: none;
+      color: #3b2f2f;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .tool-list a:hover {
+      border-color: #a0845e;
+      box-shadow: 0 2px 8px rgba(92, 61, 46, 0.15);
+    }
+    .tool-list a strong {
+      font-size: 1.15rem;
+      color: #5c3d2e;
+    }
+    .tool-list a span {
+      display: block;
+      font-size: 0.95rem;
+      color: #7a5c4f;
+      margin-top: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Woodworking Tools</h1>
+  <p class="subtitle">Calculators and design aids for the workshop</p>
+  <ul class="tool-list">
+    <li>
+      <a href="frame-designer/index.html">
+        <strong>Picture Frame Designer</strong>
+        <span>Calculate dimensions, miter cuts, and view technical diagrams for custom picture frames.</span>
+      </a>
+    </li>
+  </ul>
+</body>
+</html>

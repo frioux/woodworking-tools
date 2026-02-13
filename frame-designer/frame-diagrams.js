@@ -169,6 +169,19 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3
   }));
 
+  // Mitre lines at corners (45-degree joints)
+  const mitreLines = [
+    { x1: 0, y1: 0, x2: fw, y2: fw },         // top-left
+    { x1: w, y1: 0, x2: w - fw, y2: fw },      // top-right
+    { x1: 0, y1: h, x2: fw, y2: h - fw },      // bottom-left
+    { x1: w, y1: h, x2: w - fw, y2: h - fw }   // bottom-right
+  ];
+  for (const ml of mitreLines) {
+    svg.appendChild(svgEl(doc, 'line', {
+      ...ml, stroke: COLORS.frameDark, 'stroke-width': 0.5
+    }));
+  }
+
   // Label
   const label = svgEl(doc, 'text', {
     x: imgX + imgW / 2, y: imgY + imgH / 2,
@@ -201,6 +214,8 @@ export function renderTopSection(doc, dims, fmt) {
   const fd = dims.frameDepth * depthScale;
   const gd = dims.glassDepth * depthScale;
   const bd = dims.backerDepth * depthScale;
+  const rd = dims.rabbetDepth * depthScale;
+  const lip = 2; // rabbet shelf width in SVG units
   const totalDepth = fd;
   const svgH = totalDepth + 2 * pad;
 
@@ -210,22 +225,28 @@ export function renderTopSection(doc, dims, fmt) {
   });
   svg.appendChild(createDefs(doc));
 
-  // Left frame profile
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: 0, y: 0, width: fw, height: fd,
+  // Left frame profile (L-shaped with rabbet notch)
+  svg.appendChild(svgEl(doc, 'polygon', {
+    points: [
+      `${0},${0}`, `${fw - lip},${0}`, `${fw - lip},${rd}`,
+      `${fw},${rd}`, `${fw},${fd}`, `${0},${fd}`
+    ].join(' '),
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Right frame profile
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: w - fw, y: 0, width: fw, height: fd,
+  // Right frame profile (L-shaped, mirrored)
+  svg.appendChild(svgEl(doc, 'polygon', {
+    points: [
+      `${w - fw + lip},${0}`, `${w},${0}`, `${w},${fd}`,
+      `${w - fw},${fd}`, `${w - fw},${rd}`, `${w - fw + lip},${rd}`
+    ].join(' '),
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
   // Glass layer
   const glassY = 2;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - 2, y: glassY, width: w - 2 * fw + 4, height: gd,
+    x: fw - lip, y: glassY, width: w - 2 * fw + 2 * lip, height: gd,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
@@ -233,14 +254,14 @@ export function renderTopSection(doc, dims, fmt) {
   const matY = glassY + gd + 1;
   const matD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - 2, y: matY, width: w - 2 * fw + 4, height: matD,
+    x: fw - lip, y: matY, width: w - 2 * fw + 2 * lip, height: matD,
     fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
   // Backer layer
   const backerY = matY + matD + 1;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - 2, y: backerY, width: w - 2 * fw + 4, height: bd,
+    x: fw - lip, y: backerY, width: w - 2 * fw + 2 * lip, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
   }));
 
@@ -248,6 +269,7 @@ export function renderTopSection(doc, dims, fmt) {
   svg.appendChild(hDimension(doc, 0, fw, 0, fmt(dims.frameWidth), true));
   svg.appendChild(hDimension(doc, 0, w, fd, fmt(dims.outerWidth), false));
   svg.appendChild(vDimension(doc, 0, fd, 0, fmt(dims.frameDepth), true));
+  svg.appendChild(vDimension(doc, 0, rd, w - fw, fmt(dims.rabbetDepth), false));
 
   // Layer labels
   const labelX = w + 5;
@@ -275,6 +297,8 @@ export function renderSideSection(doc, dims, fmt) {
   const fd = dims.frameDepth * depthScale;
   const gd = dims.glassDepth * depthScale;
   const bd = dims.backerDepth * depthScale;
+  const rd = dims.rabbetDepth * depthScale;
+  const lip = 2;
 
   const svg = svgEl(doc, 'svg', {
     viewBox: `${-pad} ${-pad} ${fd + 2 * pad} ${h + 2 * pad}`,
@@ -282,22 +306,28 @@ export function renderSideSection(doc, dims, fmt) {
   });
   svg.appendChild(createDefs(doc));
 
-  // Top frame profile
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: 0, y: 0, width: fd, height: fw,
+  // Top frame profile (L-shaped with rabbet notch)
+  svg.appendChild(svgEl(doc, 'polygon', {
+    points: [
+      `${0},${0}`, `${0},${fw - lip}`, `${rd},${fw - lip}`,
+      `${rd},${fw}`, `${fd},${fw}`, `${fd},${0}`
+    ].join(' '),
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Bottom frame profile
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: 0, y: h - fw, width: fd, height: fw,
+  // Bottom frame profile (L-shaped, mirrored)
+  svg.appendChild(svgEl(doc, 'polygon', {
+    points: [
+      `${0},${h}`, `${fd},${h}`, `${fd},${h - fw}`,
+      `${rd},${h - fw}`, `${rd},${h - fw + lip}`, `${0},${h - fw + lip}`
+    ].join(' '),
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
   // Glass
   const glassX = 2;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: glassX, y: fw - 2, width: gd, height: h - 2 * fw + 4,
+    x: glassX, y: fw - lip, width: gd, height: h - 2 * fw + 2 * lip,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
@@ -305,14 +335,14 @@ export function renderSideSection(doc, dims, fmt) {
   const matX = glassX + gd + 1;
   const matD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: matX, y: fw - 2, width: matD, height: h - 2 * fw + 4,
+    x: matX, y: fw - lip, width: matD, height: h - 2 * fw + 2 * lip,
     fill: COLORS.mat, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
   // Backer
   const backerX = matX + matD + 1;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: backerX, y: fw - 2, width: bd, height: h - 2 * fw + 4,
+    x: backerX, y: fw - lip, width: bd, height: h - 2 * fw + 2 * lip,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
   }));
 
@@ -320,6 +350,7 @@ export function renderSideSection(doc, dims, fmt) {
   svg.appendChild(vDimension(doc, 0, fw, 0, fmt(dims.frameWidth), true));
   svg.appendChild(vDimension(doc, 0, h, fd, fmt(dims.outerHeight), false));
   svg.appendChild(hDimension(doc, 0, fd, 0, fmt(dims.frameDepth), true));
+  svg.appendChild(hDimension(doc, 0, rd, h - fw, fmt(dims.rabbetDepth), false));
 
   return svg;
 }

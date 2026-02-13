@@ -8,6 +8,17 @@ const INPUT_IDS = [
   'glass-depth', 'backer-depth'
 ];
 
+// Short keys for URL params (keeps URLs compact)
+const URL_KEYS = {
+  'canvas-width': 'cw', 'canvas-height': 'ch', 'image-width': 'iw',
+  'top-margin': 'tm', 'bottom-margin': 'bm',
+  'frame-width': 'fw', 'frame-depth': 'fd',
+  'glass-depth': 'gd', 'backer-depth': 'bd'
+};
+const URL_KEYS_REV = Object.fromEntries(
+  Object.entries(URL_KEYS).map(([k, v]) => [v, k])
+);
+
 function readInputs() {
   return {
     canvasWidth: parseFloat(document.getElementById('canvas-width').value) || 0,
@@ -21,6 +32,63 @@ function readInputs() {
     backerDepth: parseFloat(document.getElementById('backer-depth').value) || 0
   };
 }
+
+function updateImperialDisplays() {
+  for (const id of INPUT_IDS) {
+    const input = document.getElementById(id);
+    const span = document.querySelector(`.imperial[data-for="${id}"]`);
+    if (span) {
+      const val = parseFloat(input.value);
+      span.textContent = isNaN(val) ? '' : formatInches(val);
+    }
+  }
+}
+
+// --- URL deep linking ---
+
+function loadFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  let loaded = false;
+  for (const [shortKey, inputId] of Object.entries(URL_KEYS_REV)) {
+    const val = params.get(shortKey);
+    if (val !== null) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        document.getElementById(inputId).value = num;
+        loaded = true;
+      }
+    }
+  }
+  return loaded;
+}
+
+function buildQueryString() {
+  const parts = [];
+  for (const id of INPUT_IDS) {
+    const val = document.getElementById(id).value;
+    parts.push(`${URL_KEYS[id]}=${val}`);
+  }
+  return '?' + parts.join('&');
+}
+
+let pushTimer = null;
+
+function pushURL() {
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    const qs = buildQueryString();
+    if (qs !== window.location.search) {
+      history.pushState(null, '', qs);
+    }
+  }, 300);
+}
+
+function onPopState() {
+  loadFromURL();
+  update(false);
+}
+
+// --- rendering ---
 
 function renderCutList(dims) {
   const container = document.getElementById('cut-list-content');
@@ -92,7 +160,9 @@ function renderDiagrams(dims) {
   }
 }
 
-function update() {
+function update(updateURL = true) {
+  updateImperialDisplays();
+
   const params = readInputs();
 
   // Basic validation: all values must be positive (margins can be zero)
@@ -108,6 +178,8 @@ function update() {
 
   renderCutList(dims);
   renderDiagrams(dims);
+
+  if (updateURL) pushURL();
 }
 
 // Wire up inputs
@@ -115,5 +187,14 @@ for (const id of INPUT_IDS) {
   document.getElementById(id).addEventListener('input', update);
 }
 
-// Initial render
-update();
+// Handle back/forward navigation
+window.addEventListener('popstate', onPopState);
+
+// Load from URL on startup, then render
+loadFromURL();
+update(false);
+
+// Set initial URL if none present
+if (!window.location.search) {
+  history.replaceState(null, '', buildQueryString());
+}

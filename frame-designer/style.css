@@ -57,6 +57,23 @@ header a:hover { color: #fff; }
   color: #7a5c4f;
   margin-bottom: 0.2rem;
 }
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.input-row input {
+  flex: 1;
+  min-width: 0;
+}
+.imperial {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #5c3d2e;
+  white-space: nowrap;
+  min-width: 4.5em;
+}
 .form-group input {
   width: 100%;
   padding: 0.4rem 0.5rem;

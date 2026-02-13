@@ -2,19 +2,27 @@
 
 ## Architecture
 
-**Constraint:** Fully static site — no build step, no bundler, no npm. Just HTML, CSS, and vanilla JS. Deployable directly to GitHub Pages by pointing at the repo root or `/docs`.
+**Constraint:** Fully static site — no bundler, no framework. Just HTML, CSS, and vanilla JS. Deployable directly to GitHub Pages. npm is used only for dev tooling (linting, testing) — none of it ships to the browser.
 
 ### File Structure
 
 ```
 woodworking-tools/
-├── index.html              # Landing page / tool index
+├── index.html                    # Landing page / tool index
 ├── frame-designer/
-│   ├── index.html          # Picture frame designer page
-│   ├── style.css           # Styles for the designer
-│   ├── frame-math.js       # Pure functions: all geometry/dimension calculations
-│   ├── frame-diagrams.js   # SVG rendering: orthographic + isometric projections
-│   └── frame-ui.js         # Form handling, input validation, wiring UI to diagrams
+│   ├── index.html                # Picture frame designer page
+│   ├── style.css                 # Styles for the designer
+│   ├── frame-math.js             # Pure functions: all geometry/dimension calculations
+│   ├── frame-diagrams.js         # SVG rendering: orthographic + isometric projections
+│   └── frame-ui.js               # Form handling, input validation, wiring UI to diagrams
+├── tests/
+│   ├── frame-math.test.js        # Unit tests for calculation functions
+│   └── frame-diagrams.test.js    # Tests that SVG generation produces valid output
+├── package.json                  # Dev dependencies only (eslint, vitest, etc.)
+├── eslint.config.js              # ESLint flat config
+└── .github/
+    └── workflows/
+        └── ci.yml                # Lint + test + merge to gh-pages
 ```
 
 ## Input Parameters
@@ -81,10 +89,65 @@ The form collects these values (all dimensions in inches, with sensible defaults
 - Mobile-friendly: stacked layout on narrow viewports, responsive SVG sizing
 - A "cut list" summary section showing the computed piece lengths for the frame rails
 
+## Testing & Linting
+
+### Unit Tests (Vitest)
+
+Vitest runs the tests in a Node environment. The source JS files use plain functions that work in both browser and Node (via ESM imports).
+
+**`frame-math.test.js`** — exercises every calculation function:
+- Derived margins from canvas/image dimensions
+- Image height from canvas height minus margins
+- Rabbet depth = glass + backer + 1/16"
+- Outer dimensions = image dims + 2 × frame width
+- Miter-cut lengths (long point = outer dimension, short point = outer dimension - 2 × frame width)
+- Edge cases: zero margins, very small dimensions, asymmetric margins
+
+**`frame-diagrams.test.js`** — verifies SVG output:
+- Each diagram function returns valid SVG (well-formed XML via linkedom or happy-dom)
+- SVGs contain expected structural elements (rects, lines, text labels)
+- Dimension lines are present and labeled
+- Changing input parameters changes the output SVG
+
+### Linting (ESLint)
+
+- ESLint with flat config (`eslint.config.js`)
+- Targets the source JS under `frame-designer/` and `tests/`
+- Standard modern JS rules — no unused vars, consistent style, etc.
+
+### HTML Validation
+
+- Use `html-validate` to check all `.html` files for structural correctness and accessibility basics
+
+### CI Pipeline (GitHub Actions)
+
+**`.github/workflows/ci.yml`:**
+
+```
+on: push
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - Checkout code
+      - Setup Node 22
+      - npm ci
+      - npm run lint        (eslint + html-validate)
+      - npm run test        (vitest)
+      - If on main or a PR merges: deploy to gh-pages branch
+```
+
+The gh-pages deployment step copies only the site files (index.html, frame-designer/) to the gh-pages branch — no node_modules, no tests, no config files.
+
 ## Implementation Steps
 
 1. **Scaffold the site** — Create `index.html` (landing page with link to frame designer), `frame-designer/index.html` with the form and diagram containers, `style.css`
 2. **Implement `frame-math.js`** — Pure calculation functions: derive margins, overall dimensions, miter lengths, layer stack depths
-3. **Implement `frame-diagrams.js`** — SVG generation functions for each of the 4 views
-4. **Implement `frame-ui.js`** — Wire form inputs to recalculation + re-render, input validation
-5. **Polish** — Responsive layout, color scheme, dimension line readability, mobile testing
+3. **Write `frame-math.test.js`** — Unit tests for all calculation functions
+4. **Implement `frame-diagrams.js`** — SVG generation functions for each of the 4 views
+5. **Write `frame-diagrams.test.js`** — Tests verifying valid SVG structure and correct elements
+6. **Implement `frame-ui.js`** — Wire form inputs to recalculation + re-render, input validation
+7. **Set up dev tooling** — `package.json`, `eslint.config.js`, html-validate config
+8. **Set up CI** — `.github/workflows/ci.yml` with lint, test, and gh-pages deploy
+9. **Polish** — Responsive layout, color scheme, dimension line readability, fix any lint/test failures

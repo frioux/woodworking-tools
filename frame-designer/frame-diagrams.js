@@ -487,7 +487,7 @@ export function renderIsometric(doc, dims, _fmt) {
       points: projected.map(p => `${p.px},${p.py}`).join(' '),
       fill, stroke, 'stroke-width': 0.4
     };
-    if (opacity != null) attrs.opacity = opacity;
+    if (opacity !== null && opacity !== undefined) attrs.opacity = opacity;
     return svgEl(doc, 'polygon', attrs);
   }
 

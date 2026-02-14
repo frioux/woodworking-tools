@@ -33,6 +33,7 @@ export function calculateFrame(params) {
   const rabbetDepth = glassDepth + backerDepth + 1 / 16;
 
   // Outer frame dimensions: image opening + frame molding on each side
+  // Frame overlaps canvas by the margin, so visible opening = image dims
   const outerWidth = imageWidth + 2 * frameWidth;
   const outerHeight = imageHeight + 2 * frameWidth;
 

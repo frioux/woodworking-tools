@@ -88,6 +88,26 @@ function validate(params) {
     valid = false;
   }
 
+  // Canvas must not extend past frame — frame must be at least 3/16" wider than margin
+  const minOverlap = 3 / 16;
+  if (params.canvasWidth > 0 && params.imageWidth > 0 && params.frameWidth > 0) {
+    const sideMargin = (params.canvasWidth - params.imageWidth) / 2;
+    if (sideMargin > params.frameWidth - minOverlap) {
+      setError('canvas-width', 'Canvas too wide — frame must be at least 3/16" wider than margin');
+      valid = false;
+    }
+  }
+  if (params.canvasHeight > 0 && params.frameWidth > 0) {
+    if (params.topMargin > params.frameWidth - minOverlap) {
+      setError('top-margin', 'Top margin too large — frame must be at least 3/16" wider');
+      valid = false;
+    }
+    if (params.bottomMargin > params.frameWidth - minOverlap) {
+      setError('bottom-margin', 'Bottom margin too large — frame must be at least 3/16" wider');
+      valid = false;
+    }
+  }
+
   // Check frame depth vs glass + backer + 3/16" minimum clearance
   if (params.frameDepth > 0) {
     const minDepth = params.glassDepth + params.backerDepth + 3 / 16;

@@ -118,7 +118,8 @@ function createDefs(doc) {
 
   for (const a of arrows) {
     const marker = svgEl(doc, 'marker', {
-      id: a.id, markerWidth: 6, markerHeight: 6,
+      id: a.id, markerWidth: 3, markerHeight: 3,
+      viewBox: '0 0 6 6',
       refX: a.refX ?? 0, refY: a.refY ?? 1.5,
       markerUnits: 'userSpaceOnUse'
     });

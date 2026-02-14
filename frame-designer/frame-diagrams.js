@@ -245,25 +245,29 @@ export function renderTopSection(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Glass layer (closest to rabbet / front face)
-  const glassY = 0;
+  // Layers sit inside the rabbet notch (between the lips)
+  const layerX = fw - lip;
+  const layerW = w - 2 * (fw - lip);
+  const canvasD = 1; // canvas is effectively zero width; thin line
+
+  // Glass layer (at the bottom of the rabbet, resting on the shelf)
+  const glassY = rd - gd;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: glassY, width: w - 2 * fw, height: gd,
+    x: layerX, y: glassY, width: layerW, height: gd,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Canvas layer (adjacent to glass)
-  const canvasY = glassY + gd;
-  const canvasD = 3;
+  // Canvas layer (thin line between glass and backer)
+  const canvasY = glassY - canvasD;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: canvasY, width: w - 2 * fw, height: canvasD,
+    x: layerX, y: canvasY, width: layerW, height: canvasD,
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Backer layer (adjacent to canvas)
-  const backerY = canvasY + canvasD;
+  // Backer layer (at the top of the rabbet, nearest the opening)
+  const backerY = canvasY - bd;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: backerY, width: w - 2 * fw, height: bd,
+    x: layerX, y: backerY, width: layerW, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
   }));
 

@@ -12,13 +12,16 @@ const CANVAS_DEPTH = 0.3;
 const COLORS = {
   frame: '#8B6914',
   frameDark: '#6B4F12',
+  frameHighlight: '#A77D1C',
   glass: '#B8D4E3',
   canvas: '#F5EED9',
+  canvasLine: '#CFBF9E',
   backer: '#9E9E9E',
   backerDark: '#757575',
   opening: '#FFFFFF',
   dimension: '#444444',
-  dimLine: '#888888'
+  dimLine: '#727272',
+  centerLine: '#A49A8B'
 };
 
 /**
@@ -58,7 +61,7 @@ function hDimension(doc, x1, x2, y, label, above = true) {
   // Main line
   g.appendChild(svgEl(doc, 'line', {
     x1, y1: lineY, x2, y2: lineY,
-    stroke: COLORS.dimLine, 'stroke-width': 0.5
+    stroke: COLORS.dimLine, 'stroke-width': 0.45, 'stroke-linecap': 'round'
   }));
 
   // Left arrowhead
@@ -76,11 +79,11 @@ function hDimension(doc, x1, x2, y, label, above = true) {
   // Extension lines
   g.appendChild(svgEl(doc, 'line', {
     x1, y1: y, x2: x1, y2: y + offset - tickDir * 3,
-    stroke: COLORS.dimLine, 'stroke-width': 0.3
+    stroke: COLORS.dimLine, 'stroke-width': 0.35
   }));
   g.appendChild(svgEl(doc, 'line', {
     x1: x2, y1: y, x2, y2: y + offset - tickDir * 3,
-    stroke: COLORS.dimLine, 'stroke-width': 0.3
+    stroke: COLORS.dimLine, 'stroke-width': 0.35
   }));
 
   // Label
@@ -111,7 +114,7 @@ function vDimension(doc, y1, y2, x, label, left = true) {
   // Main line
   g.appendChild(svgEl(doc, 'line', {
     x1: lineX, y1, x2: lineX, y2,
-    stroke: COLORS.dimLine, 'stroke-width': 0.5
+    stroke: COLORS.dimLine, 'stroke-width': 0.45, 'stroke-linecap': 'round'
   }));
 
   // Top arrowhead
@@ -129,11 +132,11 @@ function vDimension(doc, y1, y2, x, label, left = true) {
   // Extension lines
   g.appendChild(svgEl(doc, 'line', {
     x1: x, y1, x2: x + offset - tickDir * 3, y2: y1,
-    stroke: COLORS.dimLine, 'stroke-width': 0.3
+    stroke: COLORS.dimLine, 'stroke-width': 0.35
   }));
   g.appendChild(svgEl(doc, 'line', {
     x1: x, y1: y2, x2: x + offset - tickDir * 3, y2,
-    stroke: COLORS.dimLine, 'stroke-width': 0.3
+    stroke: COLORS.dimLine, 'stroke-width': 0.35
   }));
 
   const text = svgEl(doc, 'text', {
@@ -146,35 +149,6 @@ function vDimension(doc, y1, y2, x, label, left = true) {
   g.appendChild(text);
 
   return g;
-}
-
-/**
- * Create arrowhead marker definitions.
- */
-function createDefs(doc) {
-  const defs = svgEl(doc, 'defs');
-
-  const arrows = [
-    { id: 'arrow-right', refX: 4, path: 'M0,0 L0,6 L4,3 Z' },
-    { id: 'arrow-left', refX: 0, path: 'M4,0 L4,6 L0,3 Z' },
-    { id: 'arrow-down', refX: 3, refY: 4, path: 'M0,0 L6,0 L3,4 Z' },
-    { id: 'arrow-up', refX: 3, refY: 0, path: 'M0,4 L6,4 L3,0 Z' }
-  ];
-
-  for (const a of arrows) {
-    const marker = svgEl(doc, 'marker', {
-      id: a.id, markerWidth: 2.5, markerHeight: 2.5,
-      viewBox: '0 0 6 6',
-      refX: a.refX ?? 0, refY: a.refY ?? 3,
-      markerUnits: 'userSpaceOnUse'
-    });
-    marker.appendChild(svgEl(doc, 'path', {
-      d: a.path, fill: COLORS.dimLine
-    }));
-    defs.appendChild(marker);
-  }
-
-  return defs;
 }
 
 /**
@@ -191,7 +165,11 @@ export function renderFrontView(doc, dims, fmt) {
     viewBox: `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}`,
     xmlns: SVG_NS
   });
-  svg.appendChild(createDefs(doc));
+
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: -pad, y: -pad, width: w + 2 * pad, height: h + 2 * pad,
+    fill: '#fffdfb'
+  }));
 
   // Outer frame
   svg.appendChild(svgEl(doc, 'rect', {
@@ -199,16 +177,26 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Canvas area (inside frame)
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw, y: fw, width: w - 2 * fw, height: h - 2 * fw,
-    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
+    x: 0.5, y: 0.5, width: w - 1, height: h - 1,
+    fill: 'none', stroke: COLORS.frameHighlight, 'stroke-width': 0.45
   }));
 
-  // Image opening — the frame's inner edge aligns with the image opening
-  // (canvas margins are hidden behind the frame molding)
+  // Hidden canvas boundary (dashed) so margin coverage is visible.
   const imgW = dims.imageWidth * scale;
   const imgH = dims.imageHeight * scale;
+  const canvasX = fw - dims.leftMargin * scale;
+  const canvasY = fw - dims.topMargin * scale;
+  const canvasW = dims.canvasWidth * scale;
+  const canvasH = dims.canvasHeight * scale;
+
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: canvasX, y: canvasY, width: canvasW, height: canvasH,
+    fill: 'none', stroke: COLORS.canvasLine, 'stroke-width': 0.45,
+    'stroke-dasharray': '1.4 1.1'
+  }));
+
+  // Image opening
   const imgX = fw;
   const imgY = fw;
   svg.appendChild(svgEl(doc, 'rect', {
@@ -235,8 +223,18 @@ export function renderFrontView(doc, dims, fmt) {
     'text-anchor': 'middle', fill: '#bbb',
     'font-size': 5, 'font-family': 'sans-serif'
   });
-  label.textContent = 'Image';
+  label.textContent = 'Visible image';
   svg.appendChild(label);
+
+  // Center lines make alignment easier to read.
+  svg.appendChild(svgEl(doc, 'line', {
+    x1: w / 2, y1: fw - 2, x2: w / 2, y2: h - fw + 2,
+    stroke: COLORS.centerLine, 'stroke-width': 0.35, 'stroke-dasharray': '1.2 1.2'
+  }));
+  svg.appendChild(svgEl(doc, 'line', {
+    x1: fw - 2, y1: h / 2, x2: w - fw + 2, y2: h / 2,
+    stroke: COLORS.centerLine, 'stroke-width': 0.35, 'stroke-dasharray': '1.2 1.2'
+  }));
 
   // Dimension lines
   svg.appendChild(hDimension(doc, 0, w, 0, fmt(dims.outerWidth), true));
@@ -269,7 +267,11 @@ export function renderTopSection(doc, dims, fmt) {
     viewBox: `${-pad} ${-pad} ${w + 2 * pad} ${svgH}`,
     xmlns: SVG_NS
   });
-  svg.appendChild(createDefs(doc));
+
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: -pad, y: -pad, width: w + 2 * pad, height: svgH,
+    fill: '#fffdfb'
+  }));
 
   // Left frame profile (L-shaped with rabbet notch)
   svg.appendChild(svgEl(doc, 'polygon', {
@@ -343,7 +345,11 @@ export function renderSideSection(doc, dims, fmt) {
     viewBox: `${-pad} ${-pad} ${vbW} ${h + 2 * pad}`,
     xmlns: SVG_NS
   });
-  svg.appendChild(createDefs(doc));
+
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: -pad, y: -pad, width: vbW, height: h + 2 * pad,
+    fill: '#fffdfb'
+  }));
 
   // Top frame profile (L-shaped with rabbet notch)
   svg.appendChild(svgEl(doc, 'polygon', {

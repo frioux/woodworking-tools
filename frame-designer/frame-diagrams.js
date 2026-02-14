@@ -110,17 +110,17 @@ function createDefs(doc) {
   const defs = svgEl(doc, 'defs');
 
   const arrows = [
-    { id: 'arrow-right', refX: 6, path: 'M0,0 L0,3 L6,1.5 Z' },
-    { id: 'arrow-left', refX: 0, path: 'M6,0 L6,3 L0,1.5 Z' },
-    { id: 'arrow-down', refX: 1.5, refY: 6, path: 'M0,0 L3,0 L1.5,6 Z' },
-    { id: 'arrow-up', refX: 1.5, refY: 0, path: 'M0,6 L3,6 L1.5,0 Z' }
+    { id: 'arrow-right', refX: 4, path: 'M0,0 L0,6 L4,3 Z' },
+    { id: 'arrow-left', refX: 0, path: 'M4,0 L4,6 L0,3 Z' },
+    { id: 'arrow-down', refX: 3, refY: 4, path: 'M0,0 L6,0 L3,4 Z' },
+    { id: 'arrow-up', refX: 3, refY: 0, path: 'M0,4 L6,4 L3,0 Z' }
   ];
 
   for (const a of arrows) {
     const marker = svgEl(doc, 'marker', {
-      id: a.id, markerWidth: 3, markerHeight: 3,
+      id: a.id, markerWidth: 2.5, markerHeight: 2.5,
       viewBox: '0 0 6 6',
-      refX: a.refX ?? 0, refY: a.refY ?? 1.5,
+      refX: a.refX ?? 0, refY: a.refY ?? 3,
       markerUnits: 'userSpaceOnUse'
     });
     marker.appendChild(svgEl(doc, 'path', {

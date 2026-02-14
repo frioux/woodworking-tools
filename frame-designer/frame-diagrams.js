@@ -463,14 +463,15 @@ export function renderIsometric(doc, dims, _fmt) {
     ow - 2 * fw, oh - 2 * fw, dims.backerDepth,
     COLORS.backer, COLORS.backerDark));
 
-  // Canvas layer
+  // Canvas layer (paper-thin in real units)
+  const isoCanvasDepth = 0.05;
   const canvasZ = backerZ + dims.backerDepth + layerGap;
   svg.appendChild(isoRect(fw, fw, canvasZ,
-    ow - 2 * fw, oh - 2 * fw, CANVAS_DEPTH,
+    ow - 2 * fw, oh - 2 * fw, isoCanvasDepth,
     COLORS.canvas, '#cba'));
 
   // Glass layer
-  const glassZ = canvasZ + CANVAS_DEPTH + layerGap;
+  const glassZ = canvasZ + isoCanvasDepth + layerGap;
   svg.appendChild(isoRect(fw, fw, glassZ,
     ow - 2 * fw, oh - 2 * fw, dims.glassDepth,
     COLORS.glass, '#7ab'));

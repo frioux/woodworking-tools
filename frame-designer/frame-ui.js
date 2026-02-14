@@ -258,8 +258,6 @@ function renderCutList(dims) {
 }
 
 function renderDiagrams(dims) {
-  const fmt = formatInches;
-
   const targets = [
     ['diagram-front', renderFrontView],
     ['diagram-top', renderTopSection],
@@ -270,7 +268,7 @@ function renderDiagrams(dims) {
   for (const [id, renderFn] of targets) {
     const container = document.getElementById(id);
     container.innerHTML = '';
-    const svg = renderFn(document, dims, fmt);
+    const svg = renderFn(document, dims, formatInches);
     container.appendChild(svg);
   }
 }

@@ -6,6 +6,9 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Color palette — muted woodworking tones
+// Canvas (paper) layer thickness in SVG units — not a user input, just enough to be visible
+const CANVAS_DEPTH = 0.3;
+
 const COLORS = {
   frame: '#8B6914',
   frameDark: '#6B4F12',
@@ -30,19 +33,44 @@ function svgEl(doc, tag, attrs = {}) {
 }
 
 /**
+ * Compute arrow scale factor: full size above 1" (4 SVG units at scale=4),
+ * linearly scaled down for smaller spans.
+ */
+function arrowScale(span) {
+  const threshold = 6; // 1.5 inches at scale=4
+  if (span >= threshold) return 1;
+  return Math.max(0.3, (span / threshold) ** 2);
+}
+
+/**
  * Draw a horizontal dimension line with label.
  */
 function hDimension(doc, x1, x2, y, label, above = true) {
   const g = svgEl(doc, 'g', { class: 'dim' });
   const offset = above ? -8 : 8;
   const tickDir = above ? 1 : -1;
+  const lineY = y + offset;
+  const span = Math.abs(x2 - x1);
+  const s = arrowScale(span);
+  const arrowLen = 2.5 * s;
+  const arrowHalf = 1.25 * s;
 
   // Main line
   g.appendChild(svgEl(doc, 'line', {
-    x1, y1: y + offset, x2, y2: y + offset,
-    stroke: COLORS.dimLine, 'stroke-width': 0.5,
-    'marker-start': 'url(#arrow-left)',
-    'marker-end': 'url(#arrow-right)'
+    x1, y1: lineY, x2, y2: lineY,
+    stroke: COLORS.dimLine, 'stroke-width': 0.5
+  }));
+
+  // Left arrowhead
+  g.appendChild(svgEl(doc, 'polygon', {
+    points: `${x1},${lineY} ${x1 + arrowLen},${lineY - arrowHalf} ${x1 + arrowLen},${lineY + arrowHalf}`,
+    fill: COLORS.dimLine
+  }));
+
+  // Right arrowhead
+  g.appendChild(svgEl(doc, 'polygon', {
+    points: `${x2},${lineY} ${x2 - arrowLen},${lineY - arrowHalf} ${x2 - arrowLen},${lineY + arrowHalf}`,
+    fill: COLORS.dimLine
   }));
 
   // Extension lines
@@ -74,14 +102,31 @@ function vDimension(doc, y1, y2, x, label, left = true) {
   const g = svgEl(doc, 'g', { class: 'dim' });
   const offset = left ? -8 : 8;
   const tickDir = left ? 1 : -1;
+  const lineX = x + offset;
+  const span = Math.abs(y2 - y1);
+  const s = arrowScale(span);
+  const arrowLen = 2.5 * s;
+  const arrowHalf = 1.25 * s;
 
+  // Main line
   g.appendChild(svgEl(doc, 'line', {
-    x1: x + offset, y1, x2: x + offset, y2,
-    stroke: COLORS.dimLine, 'stroke-width': 0.5,
-    'marker-start': 'url(#arrow-up)',
-    'marker-end': 'url(#arrow-down)'
+    x1: lineX, y1, x2: lineX, y2,
+    stroke: COLORS.dimLine, 'stroke-width': 0.5
   }));
 
+  // Top arrowhead
+  g.appendChild(svgEl(doc, 'polygon', {
+    points: `${lineX},${y1} ${lineX - arrowHalf},${y1 + arrowLen} ${lineX + arrowHalf},${y1 + arrowLen}`,
+    fill: COLORS.dimLine
+  }));
+
+  // Bottom arrowhead
+  g.appendChild(svgEl(doc, 'polygon', {
+    points: `${lineX},${y2} ${lineX - arrowHalf},${y2 - arrowLen} ${lineX + arrowHalf},${y2 - arrowLen}`,
+    fill: COLORS.dimLine
+  }));
+
+  // Extension lines
   g.appendChild(svgEl(doc, 'line', {
     x1: x, y1, x2: x + offset - tickDir * 3, y2: y1,
     stroke: COLORS.dimLine, 'stroke-width': 0.3
@@ -171,14 +216,14 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3
   }));
 
-  // Mitre lines at corners (45-degree joints)
-  const mitreLines = [
+  // Miter lines at corners (45-degree joints)
+  const miterLines = [
     { x1: 0, y1: 0, x2: fw, y2: fw },         // top-left
     { x1: w, y1: 0, x2: w - fw, y2: fw },      // top-right
     { x1: 0, y1: h, x2: fw, y2: h - fw },      // bottom-left
     { x1: w, y1: h, x2: w - fw, y2: h - fw }   // bottom-right
   ];
-  for (const ml of mitreLines) {
+  for (const ml of miterLines) {
     svg.appendChild(svgEl(doc, 'line', {
       ...ml, stroke: COLORS.frameDark, 'stroke-width': 0.5
     }));
@@ -209,7 +254,7 @@ export function renderFrontView(doc, dims, fmt) {
  */
 export function renderTopSection(doc, dims, fmt) {
   const pad = 25;
-  const scale = 8;
+  const scale = 4;
   const w = dims.outerWidth * scale;
   const fw = dims.frameWidth * scale;
   const fd = dims.frameDepth * scale;
@@ -247,27 +292,25 @@ export function renderTopSection(doc, dims, fmt) {
   // Layers sit inside the rabbet notch (between the lips)
   const layerX = fw - lip;
   const layerW = w - 2 * (fw - lip);
-  const canvasD = 0.5;
-
-  // Glass layer (at the front of the rabbet, pressed against the lip)
-  const glassY = 0;
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: layerX, y: glassY, width: layerW, height: gd,
-    fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
-  }));
-
-  // Canvas layer (behind glass)
-  const canvasY = glassY + gd;
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: layerX, y: canvasY, width: layerW, height: canvasD,
-    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
-  }));
-
-  // Backer layer (behind canvas, at the back of the rabbet)
-  const backerY = canvasY + canvasD;
+  // Backer layer (at the back of the rabbet, y=0)
+  const backerY = 0;
   svg.appendChild(svgEl(doc, 'rect', {
     x: layerX, y: backerY, width: layerW, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
+  }));
+
+  // Canvas layer (between backer and glass)
+  const canvasY = backerY + bd;
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: layerX, y: canvasY, width: layerW, height: CANVAS_DEPTH,
+    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
+  }));
+
+  // Glass layer (at the front of the rabbet, closest to viewer)
+  const glassY = canvasY + CANVAS_DEPTH;
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: layerX, y: glassY, width: layerW, height: gd,
+    fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
   // Dimensions
@@ -284,7 +327,7 @@ export function renderTopSection(doc, dims, fmt) {
  */
 export function renderSideSection(doc, dims, fmt) {
   const pad = 25;
-  const scale = 8;
+  const scale = 4;
   const h = dims.outerHeight * scale;
   const fw = dims.frameWidth * scale;
   const fd = dims.frameDepth * scale;
@@ -293,8 +336,11 @@ export function renderSideSection(doc, dims, fmt) {
   const rd = dims.rabbetDepth * scale;
   const lip = 1;
 
+  // Use outerWidth for viewBox width to match front view / top section scale
+  const vbW = dims.outerWidth * scale + 2 * pad;
+
   const svg = svgEl(doc, 'svg', {
-    viewBox: `${-pad} ${-pad} ${fd + 2 * pad} ${h + 2 * pad}`,
+    viewBox: `${-pad} ${-pad} ${vbW} ${h + 2 * pad}`,
     xmlns: SVG_NS
   });
   svg.appendChild(createDefs(doc));
@@ -317,26 +363,25 @@ export function renderSideSection(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Glass (closest to rabbet / front face)
-  const glassX = 0;
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: glassX, y: fw, width: gd, height: h - 2 * fw,
-    fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
-  }));
-
-  // Canvas (adjacent to glass)
-  const canvasX = glassX + gd;
-  const canvasD = 0.5;
-  svg.appendChild(svgEl(doc, 'rect', {
-    x: canvasX, y: fw, width: canvasD, height: h - 2 * fw,
-    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
-  }));
-
-  // Backer (adjacent to canvas)
-  const backerX = canvasX + canvasD;
+  // Backer (at the back of the rabbet, x=0)
+  const backerX = 0;
   svg.appendChild(svgEl(doc, 'rect', {
     x: backerX, y: fw, width: bd, height: h - 2 * fw,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
+  }));
+
+  // Canvas (between backer and glass)
+  const canvasX = backerX + bd;
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: canvasX, y: fw, width: CANVAS_DEPTH, height: h - 2 * fw,
+    fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
+  }));
+
+  // Glass (at the front of the rabbet, closest to viewer)
+  const glassX = canvasX + CANVAS_DEPTH;
+  svg.appendChild(svgEl(doc, 'rect', {
+    x: glassX, y: fw, width: gd, height: h - 2 * fw,
+    fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
   // Dimensions
@@ -415,31 +460,79 @@ export function renderIsometric(doc, dims, _fmt) {
   // Backer (back-most layer)
   const backerZ = 0;
   svg.appendChild(isoRect(fw, fw, backerZ,
-    ow - 2 * fw, oh - 2 * fw, dims.backerDepth * 8,
+    ow - 2 * fw, oh - 2 * fw, dims.backerDepth,
     COLORS.backer, COLORS.backerDark));
 
   // Canvas layer
-  const canvasZ = backerZ + dims.backerDepth * 8 + layerGap;
+  const canvasZ = backerZ + dims.backerDepth + layerGap;
   svg.appendChild(isoRect(fw, fw, canvasZ,
-    ow - 2 * fw, oh - 2 * fw, 2,
+    ow - 2 * fw, oh - 2 * fw, CANVAS_DEPTH,
     COLORS.canvas, '#cba'));
 
   // Glass layer
-  const glassZ = canvasZ + 2 + layerGap;
+  const glassZ = canvasZ + CANVAS_DEPTH + layerGap;
   svg.appendChild(isoRect(fw, fw, glassZ,
-    ow - 2 * fw, oh - 2 * fw, dims.glassDepth * 8,
+    ow - 2 * fw, oh - 2 * fw, dims.glassDepth,
     COLORS.glass, '#7ab'));
 
-  // Frame (front-most, with center cut out — draw as 4 rails)
-  const frameZ = glassZ + dims.glassDepth * 8 + layerGap;
+  // Frame (front-most) — draw as 4 mitered rails
+  const frameZ = glassZ + dims.glassDepth + layerGap;
+  const topZ = frameZ + fd;
+
+  // Helper to draw an isometric polygon from 3D points
+  function isoFace(pts, fill, stroke, opacity) {
+    const projected = pts.map(([x, y, z]) => isoProject(x, y, z));
+    const attrs = {
+      points: projected.map(p => `${p.px},${p.py}`).join(' '),
+      fill, stroke, 'stroke-width': 0.4
+    };
+    if (opacity != null) attrs.opacity = opacity;
+    return svgEl(doc, 'polygon', attrs);
+  }
+
+  // Side faces (behind top faces)
+  // Top rail inner face (at y=fw, faces viewer)
+  svg.appendChild(isoFace(
+    [[fw,fw,topZ], [ow-fw,fw,topZ], [ow-fw,fw,frameZ], [fw,fw,frameZ]],
+    COLORS.frame, COLORS.frameDark, 0.7
+  ));
+  // Left rail inner face (at x=fw, faces right)
+  svg.appendChild(isoFace(
+    [[fw,fw,topZ], [fw,oh-fw,topZ], [fw,oh-fw,frameZ], [fw,fw,frameZ]],
+    COLORS.frame, COLORS.frameDark, 0.85
+  ));
+  // Bottom rail outer face (at y=oh, faces viewer)
+  svg.appendChild(isoFace(
+    [[0,oh,topZ], [ow,oh,topZ], [ow,oh,frameZ], [0,oh,frameZ]],
+    COLORS.frame, COLORS.frameDark, 0.7
+  ));
+  // Right rail outer face (at x=ow, faces right)
+  svg.appendChild(isoFace(
+    [[ow,0,topZ], [ow,oh,topZ], [ow,oh,frameZ], [ow,0,frameZ]],
+    COLORS.frame, COLORS.frameDark, 0.85
+  ));
+
+  // Top faces (trapezoids showing miter joints)
   // Top rail
-  svg.appendChild(isoRect(0, 0, frameZ, ow, fw, fd, COLORS.frame, COLORS.frameDark));
-  // Bottom rail
-  svg.appendChild(isoRect(0, oh - fw, frameZ, ow, fw, fd, COLORS.frame, COLORS.frameDark));
+  svg.appendChild(isoFace(
+    [[0,0,topZ], [ow,0,topZ], [ow-fw,fw,topZ], [fw,fw,topZ]],
+    COLORS.frame, COLORS.frameDark
+  ));
   // Left rail
-  svg.appendChild(isoRect(0, fw, frameZ, fw, oh - 2 * fw, fd, COLORS.frame, COLORS.frameDark));
+  svg.appendChild(isoFace(
+    [[0,0,topZ], [fw,fw,topZ], [fw,oh-fw,topZ], [0,oh,topZ]],
+    COLORS.frame, COLORS.frameDark
+  ));
+  // Bottom rail
+  svg.appendChild(isoFace(
+    [[fw,oh-fw,topZ], [ow-fw,oh-fw,topZ], [ow,oh,topZ], [0,oh,topZ]],
+    COLORS.frame, COLORS.frameDark
+  ));
   // Right rail
-  svg.appendChild(isoRect(ow - fw, fw, frameZ, fw, oh - 2 * fw, fd, COLORS.frame, COLORS.frameDark));
+  svg.appendChild(isoFace(
+    [[ow-fw,fw,topZ], [ow,0,topZ], [ow,oh,topZ], [ow-fw,oh-fw,topZ]],
+    COLORS.frame, COLORS.frameDark
+  ));
 
   // Labels
   const labels = [

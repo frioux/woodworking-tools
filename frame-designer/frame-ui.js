@@ -108,11 +108,11 @@ function validate(params) {
     }
   }
 
-  // Check rabbet depth vs frame depth (glass + backer + 1/16" clearance must fit)
+  // Check frame depth vs glass + backer + 3/16" minimum clearance
   if (params.frameDepth > 0) {
-    const rabbetDepth = params.glassDepth + params.backerDepth + 1 / 16;
-    if (rabbetDepth > params.frameDepth) {
-      setError('frame-depth', 'Too shallow for glass + backer + 1/16" clearance');
+    const minDepth = params.glassDepth + params.backerDepth + 3 / 16;
+    if (params.frameDepth < minDepth) {
+      setError('frame-depth', 'Too shallow for glass + backer + 3/16" clearance');
       valid = false;
     }
   }

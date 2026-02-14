@@ -245,25 +245,25 @@ export function renderTopSection(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Glass layer
-  const glassY = 2;
+  // Glass layer (closest to rabbet / front face)
+  const glassY = 0;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - lip, y: glassY, width: w - 2 * fw + 2 * lip, height: gd,
+    x: fw, y: glassY, width: w - 2 * fw, height: gd,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Canvas layer
-  const canvasY = glassY + gd + 1;
+  // Canvas layer (adjacent to glass)
+  const canvasY = glassY + gd;
   const canvasD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - lip, y: canvasY, width: w - 2 * fw + 2 * lip, height: canvasD,
+    x: fw, y: canvasY, width: w - 2 * fw, height: canvasD,
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Backer layer
-  const backerY = canvasY + canvasD + 1;
+  // Backer layer (adjacent to canvas)
+  const backerY = canvasY + canvasD;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: fw - lip, y: backerY, width: w - 2 * fw + 2 * lip, height: bd,
+    x: fw, y: backerY, width: w - 2 * fw, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
   }));
 
@@ -326,25 +326,25 @@ export function renderSideSection(doc, dims, fmt) {
     fill: COLORS.frame, stroke: COLORS.frameDark, 'stroke-width': 0.5
   }));
 
-  // Glass
-  const glassX = 2;
+  // Glass (closest to rabbet / front face)
+  const glassX = 0;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: glassX, y: fw - lip, width: gd, height: h - 2 * fw + 2 * lip,
+    x: glassX, y: fw, width: gd, height: h - 2 * fw,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Canvas
-  const canvasX = glassX + gd + 1;
+  // Canvas (adjacent to glass)
+  const canvasX = glassX + gd;
   const canvasD = 3;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: canvasX, y: fw - lip, width: canvasD, height: h - 2 * fw + 2 * lip,
+    x: canvasX, y: fw, width: canvasD, height: h - 2 * fw,
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Backer
-  const backerX = canvasX + canvasD + 1;
+  // Backer (adjacent to canvas)
+  const backerX = canvasX + canvasD;
   svg.appendChild(svgEl(doc, 'rect', {
-    x: backerX, y: fw - lip, width: bd, height: h - 2 * fw + 2 * lip,
+    x: backerX, y: fw, width: bd, height: h - 2 * fw,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
   }));
 

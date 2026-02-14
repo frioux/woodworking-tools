@@ -209,15 +209,14 @@ export function renderFrontView(doc, dims, fmt) {
  */
 export function renderTopSection(doc, dims, fmt) {
   const pad = 25;
-  const scale = 4;
+  const scale = 8;
   const w = dims.outerWidth * scale;
-  const depthScale = 20; // exaggerate depth for visibility
   const fw = dims.frameWidth * scale;
-  const fd = dims.frameDepth * depthScale;
-  const gd = dims.glassDepth * depthScale;
-  const bd = dims.backerDepth * depthScale;
-  const rd = dims.rabbetDepth * depthScale;
-  const lip = 2; // rabbet shelf width in SVG units
+  const fd = dims.frameDepth * scale;
+  const gd = dims.glassDepth * scale;
+  const bd = dims.backerDepth * scale;
+  const rd = dims.rabbetDepth * scale;
+  const lip = 1; // rabbet shelf width in SVG units
   const totalDepth = fd;
   const svgH = totalDepth + 2 * pad;
 
@@ -248,24 +247,24 @@ export function renderTopSection(doc, dims, fmt) {
   // Layers sit inside the rabbet notch (between the lips)
   const layerX = fw - lip;
   const layerW = w - 2 * (fw - lip);
-  const canvasD = 1; // canvas is effectively zero width; thin line
+  const canvasD = 0.5;
 
-  // Glass layer (at the bottom of the rabbet, resting on the shelf)
-  const glassY = rd - gd;
+  // Glass layer (at the front of the rabbet, pressed against the lip)
+  const glassY = 0;
   svg.appendChild(svgEl(doc, 'rect', {
     x: layerX, y: glassY, width: layerW, height: gd,
     fill: COLORS.glass, stroke: '#7ab', 'stroke-width': 0.3
   }));
 
-  // Canvas layer (thin line between glass and backer)
-  const canvasY = glassY - canvasD;
+  // Canvas layer (behind glass)
+  const canvasY = glassY + gd;
   svg.appendChild(svgEl(doc, 'rect', {
     x: layerX, y: canvasY, width: layerW, height: canvasD,
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Backer layer (at the top of the rabbet, nearest the opening)
-  const backerY = canvasY - bd;
+  // Backer layer (behind canvas, at the back of the rabbet)
+  const backerY = canvasY + canvasD;
   svg.appendChild(svgEl(doc, 'rect', {
     x: layerX, y: backerY, width: layerW, height: bd,
     fill: COLORS.backer, stroke: COLORS.backerDark, 'stroke-width': 0.3
@@ -277,17 +276,6 @@ export function renderTopSection(doc, dims, fmt) {
   svg.appendChild(vDimension(doc, 0, fd, 0, fmt(dims.frameDepth), true));
   svg.appendChild(vDimension(doc, 0, rd, w - fw, fmt(dims.rabbetDepth), false));
 
-  // Layer labels
-  const labelX = w + 5;
-  for (const [text, y] of [['Glass', glassY + gd / 2], ['Canvas', canvasY + canvasD / 2], ['Backer', backerY + bd / 2]]) {
-    const t = svgEl(doc, 'text', {
-      x: labelX, y: y + 2,
-      fill: COLORS.dimension, 'font-size': 3.5, 'font-family': 'sans-serif'
-    });
-    t.textContent = text;
-    svg.appendChild(t);
-  }
-
   return svg;
 }
 
@@ -296,15 +284,14 @@ export function renderTopSection(doc, dims, fmt) {
  */
 export function renderSideSection(doc, dims, fmt) {
   const pad = 25;
-  const scale = 4;
+  const scale = 8;
   const h = dims.outerHeight * scale;
-  const depthScale = 20;
   const fw = dims.frameWidth * scale;
-  const fd = dims.frameDepth * depthScale;
-  const gd = dims.glassDepth * depthScale;
-  const bd = dims.backerDepth * depthScale;
-  const rd = dims.rabbetDepth * depthScale;
-  const lip = 2;
+  const fd = dims.frameDepth * scale;
+  const gd = dims.glassDepth * scale;
+  const bd = dims.backerDepth * scale;
+  const rd = dims.rabbetDepth * scale;
+  const lip = 1;
 
   const svg = svgEl(doc, 'svg', {
     viewBox: `${-pad} ${-pad} ${fd + 2 * pad} ${h + 2 * pad}`,
@@ -339,7 +326,7 @@ export function renderSideSection(doc, dims, fmt) {
 
   // Canvas (adjacent to glass)
   const canvasX = glassX + gd;
-  const canvasD = 3;
+  const canvasD = 0.5;
   svg.appendChild(svgEl(doc, 'rect', {
     x: canvasX, y: fw, width: canvasD, height: h - 2 * fw,
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3

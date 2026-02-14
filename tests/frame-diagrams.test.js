@@ -73,13 +73,13 @@ describe('renderTopSection', () => {
     expect(polys.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('has layer labels', () => {
+  it('does not have layer labels', () => {
     const svg = renderTopSection(doc, dims, formatInches);
     const texts = svg.querySelectorAll('text');
     const labels = Array.from(texts).map(t => t.textContent);
-    expect(labels).toContain('Glass');
-    expect(labels).toContain('Canvas');
-    expect(labels).toContain('Backer');
+    expect(labels).not.toContain('Glass');
+    expect(labels).not.toContain('Canvas');
+    expect(labels).not.toContain('Backer');
   });
 });
 

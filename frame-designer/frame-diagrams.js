@@ -159,11 +159,12 @@ export function renderFrontView(doc, dims, fmt) {
     fill: COLORS.canvas, stroke: '#ccc', 'stroke-width': 0.3
   }));
 
-  // Image opening (offset by margins within the canvas)
+  // Image opening — the frame's inner edge aligns with the image opening
+  // (canvas margins are hidden behind the frame molding)
   const imgW = dims.imageWidth * scale;
   const imgH = dims.imageHeight * scale;
-  const imgX = fw + dims.leftMargin * scale;
-  const imgY = fw + dims.topMargin * scale;
+  const imgX = fw;
+  const imgY = fw;
   svg.appendChild(svgEl(doc, 'rect', {
     x: imgX, y: imgY, width: imgW, height: imgH,
     fill: COLORS.opening, stroke: '#aaa', 'stroke-width': 0.3

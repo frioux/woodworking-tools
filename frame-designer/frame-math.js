@@ -77,7 +77,7 @@ export function calculateFrame(params) {
 
 /**
  * Format a decimal inch value as a fraction string for display.
- * Recognizes halves, quarters, eighths, and sixteenths.
+ * Recognizes halves, quarters, eighths, sixteenths, and thirty-seconds.
  * @param {number} value
  * @returns {string}
  */
@@ -85,13 +85,13 @@ export function formatInches(value) {
   const whole = Math.floor(value);
   let frac = value - whole;
 
-  // Round to nearest 1/16
-  const sixteenths = Math.round(frac * 16);
-  if (sixteenths === 0) return `${whole}"`;
-  if (sixteenths === 16) return `${whole + 1}"`;
+  // Round to nearest 1/32
+  const thirtySeconds = Math.round(frac * 32);
+  if (thirtySeconds === 0) return `${whole}"`;
+  if (thirtySeconds === 32) return `${whole + 1}"`;
 
-  frac = sixteenths;
-  let denom = 16;
+  frac = thirtySeconds;
+  let denom = 32;
 
   // Simplify fraction
   while (frac % 2 === 0 && denom > 1) {

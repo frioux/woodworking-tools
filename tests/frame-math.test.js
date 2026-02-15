@@ -88,6 +88,37 @@ describe('calculateFrame', () => {
     expect(result.topMargin).toBe(2);
     expect(result.bottomMargin).toBe(5);
   });
+
+  it('defaults shootingAllowance to 0 with no sawn length addition', () => {
+    const result = calculateFrame(defaults);
+    expect(result.shootingAllowance).toBe(0);
+    expect(result.sawnLengthHorizontal).toBe(result.miterLengthHorizontal);
+    expect(result.sawnLengthVertical).toBe(result.miterLengthVertical);
+  });
+
+  it('adds shooting allowance to both ends for sawn lengths', () => {
+    const result = calculateFrame({
+      ...defaults,
+      shootingAllowance: 1 / 16 // 1/16" per end
+    });
+    // Sawn = miter long point + 2 * allowance
+    expect(result.sawnLengthHorizontal).toBe(result.miterLengthHorizontal + 1 / 8);
+    expect(result.sawnLengthVertical).toBe(result.miterLengthVertical + 1 / 8);
+  });
+
+  it('calculates sawn lengths for a typical frame with shooting allowance', () => {
+    const result = calculateFrame({
+      ...defaults,
+      shootingAllowance: 1 / 32
+    });
+    // 1/32" per end = 1/16" total per piece
+    expect(result.sawnLengthHorizontal).toBeCloseTo(
+      result.miterLengthHorizontal + 1 / 16
+    );
+    expect(result.sawnLengthVertical).toBeCloseTo(
+      result.miterLengthVertical + 1 / 16
+    );
+  });
 });
 
 describe('formatInches', () => {

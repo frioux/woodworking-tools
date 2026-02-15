@@ -15,6 +15,7 @@
  * @param {number} params.frameDepth   - Frame molding thickness
  * @param {number} params.glassDepth   - Glass/acrylic pane thickness
  * @param {number} params.backerDepth  - Backer board thickness
+ * @param {number} [params.shootingAllowance=0] - Extra length per end for shooting miters
  * @returns {object} All derived dimensions
  */
 export function calculateFrame(params) {
@@ -22,7 +23,8 @@ export function calculateFrame(params) {
     canvasWidth, canvasHeight, imageWidth,
     topMargin, bottomMargin,
     frameWidth, frameDepth,
-    glassDepth, backerDepth
+    glassDepth, backerDepth,
+    shootingAllowance = 0
   } = params;
 
   const leftMargin = (canvasWidth - imageWidth) / 2;
@@ -45,6 +47,10 @@ export function calculateFrame(params) {
   const miterShortHorizontal = outerWidth - 2 * frameWidth;
   const miterShortVertical = outerHeight - 2 * frameWidth;
 
+  // Sawn (rough-cut) lengths: add shooting allowance to each end
+  const sawnLengthHorizontal = miterLengthHorizontal + 2 * shootingAllowance;
+  const sawnLengthVertical = miterLengthVertical + 2 * shootingAllowance;
+
   return {
     // Input echo
     canvasWidth, canvasHeight, imageWidth,
@@ -62,7 +68,10 @@ export function calculateFrame(params) {
     miterLengthHorizontal,
     miterLengthVertical,
     miterShortHorizontal,
-    miterShortVertical
+    miterShortVertical,
+    shootingAllowance,
+    sawnLengthHorizontal,
+    sawnLengthVertical
   };
 }
 

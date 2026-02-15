@@ -5,7 +5,8 @@ const INPUT_IDS = [
   'canvas-width', 'canvas-height', 'image-width',
   'top-margin', 'bottom-margin',
   'frame-width', 'frame-depth',
-  'glass-depth', 'backer-depth'
+  'glass-depth', 'backer-depth',
+  'shooting-allowance'
 ];
 
 // Short keys for URL params (keeps URLs compact)
@@ -13,7 +14,8 @@ const URL_KEYS = {
   'canvas-width': 'cw', 'canvas-height': 'ch', 'image-width': 'iw',
   'top-margin': 'tm', 'bottom-margin': 'bm',
   'frame-width': 'fw', 'frame-depth': 'fd',
-  'glass-depth': 'gd', 'backer-depth': 'bd'
+  'glass-depth': 'gd', 'backer-depth': 'bd',
+  'shooting-allowance': 'sa'
 };
 const URL_KEYS_REV = Object.fromEntries(
   Object.entries(URL_KEYS).map(([k, v]) => [v, k])
@@ -29,7 +31,8 @@ function readInputs() {
     frameWidth: parseFloat(document.getElementById('frame-width').value) || 0,
     frameDepth: parseFloat(document.getElementById('frame-depth').value) || 0,
     glassDepth: parseFloat(document.getElementById('glass-depth').value) || 0,
-    backerDepth: parseFloat(document.getElementById('backer-depth').value) || 0
+    backerDepth: parseFloat(document.getElementById('backer-depth').value) || 0,
+    shootingAllowance: parseFloat(document.getElementById('shooting-allowance').value) || 0
   };
 }
 
@@ -188,21 +191,41 @@ function renderCutList(dims) {
   container.appendChild(cutHeading);
 
   const cutTable = document.createElement('table');
-  cutTable.innerHTML = `
-    <thead><tr><th>Piece</th><th>Qty</th><th>Length</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Horizontal rails</td>
-        <td>2</td>
-        <td>${formatInches(dims.miterLengthHorizontal)}</td>
-      </tr>
-      <tr>
-        <td>Vertical rails</td>
-        <td>2</td>
-        <td>${formatInches(dims.miterLengthVertical)}</td>
-      </tr>
-    </tbody>
-  `;
+  if (dims.shootingAllowance > 0) {
+    cutTable.innerHTML = `
+      <thead><tr><th>Piece</th><th>Qty</th><th>Sawn</th><th>Shot Target</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Horizontal rails</td>
+          <td>2</td>
+          <td>${formatInches(dims.sawnLengthHorizontal)}</td>
+          <td>${formatInches(dims.miterLengthHorizontal)}</td>
+        </tr>
+        <tr>
+          <td>Vertical rails</td>
+          <td>2</td>
+          <td>${formatInches(dims.sawnLengthVertical)}</td>
+          <td>${formatInches(dims.miterLengthVertical)}</td>
+        </tr>
+      </tbody>
+    `;
+  } else {
+    cutTable.innerHTML = `
+      <thead><tr><th>Piece</th><th>Qty</th><th>Length</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Horizontal rails</td>
+          <td>2</td>
+          <td>${formatInches(dims.miterLengthHorizontal)}</td>
+        </tr>
+        <tr>
+          <td>Vertical rails</td>
+          <td>2</td>
+          <td>${formatInches(dims.miterLengthVertical)}</td>
+        </tr>
+      </tbody>
+    `;
+  }
   container.appendChild(cutTable);
 
   // --- Miter Values ---

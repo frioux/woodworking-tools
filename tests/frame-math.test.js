@@ -145,6 +145,12 @@ describe('formatInches', () => {
     expect(formatInches(1.0625)).toBe('1-1/16"');
   });
 
+  it('formats thirty-seconds', () => {
+    expect(formatInches(0.03125)).toBe('1/32"');
+    expect(formatInches(1.03125)).toBe('1-1/32"');
+    expect(formatInches(2.09375)).toBe('2-3/32"');
+  });
+
   it('formats zero', () => {
     expect(formatInches(0)).toBe('0"');
   });

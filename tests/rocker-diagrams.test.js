@@ -39,8 +39,8 @@ describe('renderChairProfile', () => {
   it('contains circle elements for CoG and contact point', () => {
     const g = renderChairProfile(doc, model, 0);
     const circles = g.querySelectorAll('circle');
-    // ghost arc circle + CoG + contact = 3
-    expect(circles.length).toBeGreaterThanOrEqual(3);
+    // CoG + contact = 2
+    expect(circles.length).toBeGreaterThanOrEqual(2);
   });
 
   it('contains CoG label text', () => {

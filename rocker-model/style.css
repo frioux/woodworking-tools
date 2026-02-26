@@ -1,0 +1,215 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #f5f0eb;
+  color: #3b2f2f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  background: #5c3d2e;
+  color: #f5f0eb;
+  padding: 1rem 1.5rem;
+}
+header h1 { font-size: 1.5rem; }
+header a {
+  color: #d4c4b0;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+header a:hover { color: #fff; }
+
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- Form panel --- */
+.form-panel {
+  flex: 0 0 300px;
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  align-self: flex-start;
+  position: sticky;
+  top: 1rem;
+}
+.form-panel h2 {
+  font-size: 1.1rem;
+  color: #5c3d2e;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.5rem;
+}
+.form-group {
+  margin-bottom: 0.75rem;
+}
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: #7a5c4f;
+  margin-bottom: 0.2rem;
+}
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.input-row input, .input-row select {
+  flex: 1;
+  min-width: 0;
+}
+.step-btn {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  background: #faf8f5;
+  color: #7a5c4f;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.step-btn:active {
+  background: #e8ddd2;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #3b2f2f;
+  background: #faf8f5;
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: #a0845e;
+  box-shadow: 0 0 0 2px rgba(160, 132, 94, 0.2);
+}
+.form-group.has-error label {
+  color: #c00;
+}
+.error {
+  font-size: 0.75rem;
+  color: #c00;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+.section-divider {
+  border: none;
+  border-top: 1px solid #e8ddd2;
+  margin: 1rem 0;
+}
+
+/* --- Play button --- */
+.play-row {
+  margin-top: 1rem;
+  text-align: center;
+}
+.play-btn {
+  padding: 0.5rem 2rem;
+  border: 1px solid #5c3d2e;
+  border-radius: 6px;
+  background: #5c3d2e;
+  color: #f5f0eb;
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.play-btn:hover {
+  background: #7a5c4f;
+}
+
+/* --- Diagram area --- */
+.main-area {
+  flex: 1 1 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.diagram-card {
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.diagram-card h3 {
+  font-size: 0.95rem;
+  color: #5c3d2e;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.4rem;
+}
+.diagram-card svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fffdfb 0%, #f7f2ec 100%);
+  box-shadow: inset 0 0 0 1px rgba(92, 61, 46, 0.08);
+  min-height: 300px;
+}
+
+/* --- Info panel --- */
+.info-card {
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.info-card h3 {
+  font-size: 0.95rem;
+  color: #5c3d2e;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.4rem;
+}
+.rocker-info {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  font-size: 0.9rem;
+}
+.rocker-info dt {
+  color: #7a5c4f;
+}
+.rocker-info dd {
+  font-weight: bold;
+  color: #5c3d2e;
+  text-align: right;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  .form-panel {
+    flex: 1 1 auto;
+    position: static;
+  }
+  .step-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.25rem;
+    border-radius: 6px;
+  }
+}

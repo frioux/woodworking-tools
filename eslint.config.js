@@ -1,6 +1,6 @@
 export default [
   {
-    files: ['frame-designer/**/*.js', 'tests/**/*.js'],
+    files: ['frame-designer/**/*.js', 'rocker-model/**/*.js', 'tests/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -13,7 +13,11 @@ export default [
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         history: 'readonly',
-        Event: 'readonly'
+        Event: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        decodeURIComponent: 'readonly',
+        encodeURIComponent: 'readonly'
       }
     },
     rules: {

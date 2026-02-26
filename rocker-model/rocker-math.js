@@ -200,7 +200,7 @@ export function buildRockerModel(params) {
   const period = rockingPeriod(lEff);
   const damping = estimateDamping(sitterWeight);
   const stable = lEff > 0;
-  const initialAmplitude = Math.PI / 18; // 10° starting push
+  const initialAmplitude = Math.PI / 12; // 15° starting push
 
   return {
     radius,

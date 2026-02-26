@@ -16,7 +16,6 @@ const COLOR_LEGS     = "#6B4226";   // dark wood
 const COLOR_BACK     = "#7A5C4F";   // backrest
 const COLOR_FLOOR    = "#C8B89A";   // floor line
 const COLOR_COG      = "#CC3333";   // centre of gravity dot
-const COLOR_ARC_HINT = "#D4C4B0";   // faint arc guide
 
 // Drawing scale: 1 inch → this many SVG units
 const SCALE = 4;
@@ -67,9 +66,9 @@ export function renderChairProfile(doc, model, theta) {
 
   const s = SCALE;
 
-  // --- Rocker arc (the curved bottom) ---
-  // Draw a portion of the arc ±30° around the contact point
-  const arcAngle = Math.PI / 6;
+  // --- Rocker arc (the curved runner) ---
+  // Draw a generous portion of the arc so rolling on the floor is visible
+  const arcAngle = Math.PI / 3.2;
   const arcGroup = svgEl(doc, "g");
 
   const steps = 40;
@@ -90,18 +89,9 @@ export function renderChairProfile(doc, model, theta) {
   arcGroup.appendChild(arcPath);
   g.appendChild(arcGroup);
 
-  // --- Ghost arc (full circle hint, faint) ---
-  const ghostCircle = svgEl(doc, "circle", {
-    cx: arcCenterX * s,
-    cy: -arcCenterY * s,
-    r: radius * s,
-    fill: "none",
-    stroke: COLOR_ARC_HINT,
-    "stroke-width": 0.5,
-    "stroke-dasharray": "4,6",
-    opacity: 0.5,
-  });
-  g.appendChild(ghostCircle);
+  // --- Floor contact indicator (small tick at contact point) ---
+  const tickLen = 1.5 * s;
+  g.appendChild(line(doc, contactX * s, 0, contactX * s, -tickLen, COLOR_FLOOR, 1.5));
 
   // --- Legs ---
   // Two legs from the rocker arc up to the seat.

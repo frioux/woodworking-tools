@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Galbert's Rocker Model — Woodworking Tools</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="../index.html">&larr; All Tools</a>
+    <h1>Galbert's Rocker Model</h1>
+  </header>
+
+  <div class="layout">
+    <!-- ─── Form Panel ─── -->
+    <div class="form-panel">
+      <h2>Chair Geometry</h2>
+
+      <div class="form-group">
+        <label for="radius">Rocker Radius (in) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease radius">&minus;</button>
+          <input type="number" id="radius" value="42" min="1" step="1">
+          <button type="button" class="step-btn step-up" aria-label="increase radius">&plus;</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="seat-height">Seat Height (in) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease seat height">&minus;</button>
+          <input type="number" id="seat-height" value="17" min="1" step="0.5">
+          <button type="button" class="step-btn step-up" aria-label="increase seat height">&plus;</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="seat-depth">Seat Depth to Backrest (in) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease seat depth">&minus;</button>
+          <input type="number" id="seat-depth" value="16" min="1" step="0.5">
+          <button type="button" class="step-btn step-up" aria-label="increase seat depth">&plus;</button>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+      <h2>Sitter</h2>
+
+      <div class="form-group">
+        <label for="sitter-weight">Weight (lb) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease weight">&minus;</button>
+          <input type="number" id="sitter-weight" value="170" min="50" step="5">
+          <button type="button" class="step-btn step-up" aria-label="increase weight">&plus;</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="sitter-height">Height (in) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease height">&minus;</button>
+          <input type="number" id="sitter-height" value="70" min="36" step="1">
+          <button type="button" class="step-btn step-up" aria-label="increase height">&plus;</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="sitter-gender">Gender <span class="error"></span></label>
+        <div class="input-row">
+          <select id="sitter-gender">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="play-row">
+        <button type="button" class="play-btn" id="play-btn">Rock</button>
+      </div>
+    </div>
+
+    <!-- ─── Main Area ─── -->
+    <div class="main-area">
+      <div class="diagram-card">
+        <h3>Side View — Rocking Animation</h3>
+        <div id="diagram-container"></div>
+      </div>
+
+      <div class="info-card">
+        <h3>Model Parameters</h3>
+        <div id="info-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="rocker-ui.js"></script>
+</body>
+</html>

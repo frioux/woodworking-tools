@@ -229,10 +229,11 @@ function renderStickFigure(doc, model, theta, geom) {
  * @returns {SVGGElement}
  */
 export function renderChairProfile(doc, model, theta) {
-  const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat } = model;
+  const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
+          cogOffsetX = 0 } = model;
   const g = svgEl(doc, "g");
 
-  const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta);
+  const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
   const { contactX, cogX, cogY, arcCenterX, arcCenterY } = geom;
 
   const s = SCALE;
@@ -420,7 +421,14 @@ export function renderInfoPanel(doc, model) {
   const dl = doc.createElement("dl");
   dl.className = "rocker-info";
 
+  const thetaEqDeg = model.thetaEq !== undefined && model.thetaEq !== null
+    ? (model.thetaEq * 180 / Math.PI).toFixed(1)
+    : "0.0";
+  const tiltDir = model.thetaEq > 0.001 ? " (back)"
+                : model.thetaEq < -0.001 ? " (fwd)" : "";
+
   const items = [
+    ["Natural tilt", `${thetaEqDeg}°${tiltDir}`],
     ["Effective pendulum length", `${model.lEff.toFixed(1)} in`],
     ["Natural period", model.stable ? `${model.period.toFixed(2)} s` : "Unstable"],
     ["Rocks per minute", model.stable ? `${(60 / model.period).toFixed(1)}` : "—"],
@@ -428,6 +436,7 @@ export function renderInfoPanel(doc, model) {
       ? `± ${(model.seatHeight * model.initialAmplitude).toFixed(1)} in`
       : "—"],
     ["System CoG above floor", `${model.cogHeight.toFixed(1)} in`],
+    ["CoG fore/aft offset", `${(model.cogOffsetX || 0).toFixed(1)} in`],
     ["Gap (R − CoG)", `${(model.radius - model.cogHeight).toFixed(1)} in`],
     ["Damping ratio", model.damping.toFixed(3)],
     ["Stability", model.stable ? "Stable" : "Unstable — CoG above rocker centre"],

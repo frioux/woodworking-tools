@@ -5,7 +5,7 @@
  * Manages animation loop, URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel } from "./rocker-math.js";
+import { buildRockerModel, POSTURE_PRESETS } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
@@ -14,7 +14,8 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
-const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS];
+const POSTURE_IDS = ["posture", "cog-offset-x"];
+const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
 
 // URL query-string short keys
 const URL_KEYS = {
@@ -26,6 +27,8 @@ const URL_KEYS = {
   "sitter-weight": "sw",
   "sitter-height": "sth",
   "sitter-gender": "sg",
+  "posture": "p",
+  "cog-offset-x": "cx",
 };
 
 /* ------------------------------------------------------------------ */
@@ -155,6 +158,7 @@ function loadFromURL() {
 
 function onPopState() {
   loadFromURL();
+  syncPostureFromOffset();
   update(false);
   restartAnimation();
 }
@@ -221,7 +225,7 @@ function stopAnimation() {
 function restartAnimation() {
   stopAnimation();
   if (currentModel) {
-    renderDiagram(0);
+    renderDiagram(currentModel.thetaEq);
   }
 }
 
@@ -254,10 +258,11 @@ function update(updateURL = true) {
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],
+    cogOffsetX: vals["cog-offset-x"],
   });
 
   renderInfo();
-  renderDiagram(0);
+  renderDiagram(currentModel.thetaEq);
 
   if (updateURL) {
     pushURL();
@@ -289,13 +294,50 @@ function wireSteppers() {
 /*  Init                                                              */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Posture ↔ CoG offset wiring                                      */
+/* ------------------------------------------------------------------ */
+
+function applyPosture(key) {
+  const preset = POSTURE_PRESETS[key];
+  if (!preset) {
+    return;
+  }
+  const offsetEl = document.getElementById("cog-offset-x");
+  offsetEl.value = preset.cogOffsetX;
+}
+
+function syncPostureFromOffset() {
+  const offsetVal = parseFloat(document.getElementById("cog-offset-x").value) || 0;
+  const match = Object.entries(POSTURE_PRESETS).find(
+    ([, p]) => p.cogOffsetX === offsetVal
+  );
+  const postureEl = document.getElementById("posture");
+  postureEl.value = match ? match[0] : "custom";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Init                                                              */
+/* ------------------------------------------------------------------ */
+
 function init() {
   loadFromURL();
+
+  // Sync posture dropdown from the loaded cogOffsetX
+  syncPostureFromOffset();
 
   // Wire all inputs
   for (const id of ALL_IDS) {
     const el = document.getElementById(id);
     el.addEventListener("input", () => {
+      // Posture dropdown → set offset, then update
+      if (id === "posture") {
+        applyPosture(el.value);
+      }
+      // Manual offset change → switch posture to Custom
+      if (id === "cog-offset-x") {
+        syncPostureFromOffset();
+      }
       update();
       restartAnimation();
     });

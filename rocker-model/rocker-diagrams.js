@@ -152,8 +152,8 @@ export function renderChairProfile(doc, model, theta) {
   const backH = seatDepth * 0.6; // backrest length proportional to seat depth
   // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
   // In the local frame the seat is horizontal, so the angle from the +x axis
-  // (pointing forward) to the backrest direction is (180 − backrestAngle).
-  const backAngleRad = (180 - (backrestAngle || 100)) * Math.PI / 180;
+  // (pointing forward) to the backrest direction equals the backrestAngle directly.
+  const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
   const localBaseX = -seatHalfLen;
   const localBaseY = legTopLocalY + seatThickness;
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);

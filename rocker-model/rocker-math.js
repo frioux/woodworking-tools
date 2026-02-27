@@ -99,16 +99,27 @@ export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, thet
 /**
  * Effective pendulum length for small oscillations.
  *
- * For a body whose CoG is at height h_cg above the floor, resting on a
- * rocker of radius R, the effective pendulum length for the rocking
- * motion is  L_eff = R − h_cg  (when h_cg < R, the system is stable).
+ * For a body whose CoG is at height h above the floor, resting on a
+ * circular rocker of radius R, the equation of motion is:
+ *
+ *   θ̈ = −g(R − h) / h² · θ
+ *
+ * because the rolling contact point translates (KE = ½mh²θ̇²), unlike
+ * a fixed-pivot pendulum.  Expressed as a simple-pendulum equivalent
+ * (T = 2π√(L/g)), the effective length is  L_eff = h² / (R − h).
+ *
+ * When h ≥ R the system is unstable (CoG at or above the arc centre).
  *
  * @param {number} radius     – rocker radius (in)
  * @param {number} cogHeight  – CoG height above floor (in) = seatHeight + cogAboveSeat
  * @returns {number} effective pendulum length (in); negative ⇒ unstable
  */
 export function effectivePendulumLength(radius, cogHeight) {
-  return radius - cogHeight;
+  const gap = radius - cogHeight;
+  if (gap <= 0) {
+    return -1;  // unstable
+  }
+  return (cogHeight * cogHeight) / gap;
 }
 
 /**

@@ -51,11 +51,11 @@ describe('renderChairProfile', () => {
     expect(cogText).toBeTruthy();
   });
 
-  it('contains line elements for legs, seat, and backrest', () => {
+  it('contains line elements for legs, seat, backrest, and stick figure', () => {
     const g = renderChairProfile(doc, model, 0);
     const lines = g.querySelectorAll('line');
-    // 1 floor tick + 2 legs + 1 seat + 1 backrest = 5
-    expect(lines.length).toBeGreaterThanOrEqual(5);
+    // 1 floor tick + 2 legs + 1 seat + 1 backrest + stick figure (neck, upper leg, lower leg, upper arm, forearm) = 10
+    expect(lines.length).toBeGreaterThanOrEqual(10);
   });
 
   it('produces different output at different angles', () => {
@@ -65,6 +65,40 @@ describe('renderChairProfile', () => {
     const path0 = g0.querySelector('path').getAttribute('d');
     const path1 = g1.querySelector('path').getAttribute('d');
     expect(path0).not.toBe(path1);
+  });
+
+  it('contains stick figure torso triangle', () => {
+    const g = renderChairProfile(doc, model, 0);
+    const torso = g.querySelector('[data-testid="stick-torso"]');
+    expect(torso).toBeTruthy();
+    expect(torso.tagName).toBe('path');
+  });
+
+  it('contains stick figure head circle', () => {
+    const g = renderChairProfile(doc, model, 0);
+    const head = g.querySelector('[data-testid="stick-head"]');
+    expect(head).toBeTruthy();
+    expect(head.tagName).toBe('circle');
+  });
+
+  it('renders male torso as inverted triangle (wider at top)', () => {
+    const maleModel = buildRockerModel({ ...defaults, sitterGender: 'male' });
+    const g = renderChairProfile(doc, maleModel, 0);
+    const torso = g.querySelector('[data-testid="stick-torso"]');
+    const d = torso.getAttribute('d');
+    // Male: two shoulder points + one hip point → 3 path segments + Z
+    expect(d).toContain('M');
+    expect(d).toContain('Z');
+  });
+
+  it('renders female torso differently from male', () => {
+    const maleModel = buildRockerModel({ ...defaults, sitterGender: 'male' });
+    const femaleModel = buildRockerModel({ ...defaults, sitterGender: 'female' });
+    const gMale = renderChairProfile(doc, maleModel, 0);
+    const gFemale = renderChairProfile(doc, femaleModel, 0);
+    const maleTorso = gMale.querySelector('[data-testid="stick-torso"]').getAttribute('d');
+    const femaleTorso = gFemale.querySelector('[data-testid="stick-torso"]').getAttribute('d');
+    expect(maleTorso).not.toBe(femaleTorso);
   });
 });
 

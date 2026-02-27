@@ -67,14 +67,16 @@ export function renderChairProfile(doc, model, theta) {
   const s = SCALE;
 
   // --- Rocker arc (the curved runner) ---
-  // Draw a generous portion of the arc so rolling on the floor is visible
+  // Draw a generous portion of the arc so rolling on the floor is visible.
+  // The physical rocker spans ±arcAngle from the body bottom.  The body
+  // bottom is at world-frame angle −θ from vertical (CW rotation).
   const arcAngle = Math.PI / 3.2;
   const arcGroup = svgEl(doc, "g");
 
   const steps = 40;
   let pathD = "";
   for (let i = 0; i <= steps; i++) {
-    const a = theta - arcAngle + (2 * arcAngle * i) / steps;
+    const a = -theta - arcAngle + (2 * arcAngle * i) / steps;
     const px = (arcCenterX + radius * Math.sin(a)) * s;
     const py = (arcCenterY - radius * Math.cos(a)) * s;
     pathD += (i === 0 ? "M" : "L") + `${px},${-py}`;
@@ -102,20 +104,20 @@ export function renderChairProfile(doc, model, theta) {
   const legTopLocalY = seatHeight - radius;                // seat level in local frame
   // Place leg bottoms on the arc at the angle corresponding to each leg offset
   for (const lx of legOffsets) {
-    // Bottom of leg: on the arc surface
+    // Bottom of leg: on the arc surface (relative to arc centre)
     const legAngle = Math.asin(Math.max(-1, Math.min(1, lx / radius)));
     const localBotX = radius * Math.sin(legAngle);
-    const localBotY = -radius + radius * Math.cos(legAngle);
+    const localBotY = -radius * Math.cos(legAngle);
 
     // Top of leg: at seat level, same x
     const localTopX = lx;
     const localTopY = legTopLocalY;
 
-    // Rotate into world frame
-    const botX = arcCenterX + localBotX * Math.cos(theta) - localBotY * Math.sin(theta);
-    const botY = arcCenterY + localBotX * Math.sin(theta) + localBotY * Math.cos(theta);
-    const topX = arcCenterX + localTopX * Math.cos(theta) - localTopY * Math.sin(theta);
-    const topY = arcCenterY + localTopX * Math.sin(theta) + localTopY * Math.cos(theta);
+    // Rotate into world frame (clockwise by θ)
+    const botX = arcCenterX + localBotX * Math.cos(theta) + localBotY * Math.sin(theta);
+    const botY = arcCenterY - localBotX * Math.sin(theta) + localBotY * Math.cos(theta);
+    const topX = arcCenterX + localTopX * Math.cos(theta) + localTopY * Math.sin(theta);
+    const topY = arcCenterY - localTopX * Math.sin(theta) + localTopY * Math.cos(theta);
 
     g.appendChild(line(doc, botX * s, -botY * s, topX * s, -topY * s, COLOR_LEGS, 3));
   }
@@ -134,8 +136,8 @@ export function renderChairProfile(doc, model, theta) {
   let seatPath = "";
   for (let i = 0; i < seatCorners.length; i++) {
     const [lx, ly] = seatCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) - ly * Math.sin(theta);
-    const wy = arcCenterY + lx * Math.sin(theta) + ly * Math.cos(theta);
+    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
+    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
     seatPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
   }
   seatPath += "Z";
@@ -159,8 +161,8 @@ export function renderChairProfile(doc, model, theta) {
   let backPath = "";
   for (let i = 0; i < backCorners.length; i++) {
     const [lx, ly] = backCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) - ly * Math.sin(theta);
-    const wy = arcCenterY + lx * Math.sin(theta) + ly * Math.cos(theta);
+    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
+    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
     backPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
   }
   backPath += "Z";

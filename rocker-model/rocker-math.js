@@ -230,36 +230,93 @@ export function estimateDamping(weightLb) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  System centre-of-gravity (chair + sitter)                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Estimate the chair's own centre-of-gravity height above the floor.
+ *
+ * Most mass lives in the runners and legs (below the seat), with some
+ * in the seat and back.  A reasonable approximation is ≈ ⅔ of the
+ * seat height.
+ *
+ * @param {number} seatHeight – seat height off floor (in)
+ * @returns {number} estimated chair CoG height (in)
+ */
+export function estimateChairCogHeight(seatHeight) {
+  return seatHeight * (2 / 3);
+}
+
+/**
+ * Compute the combined system CoG height (chair + sitter).
+ *
+ * @param {number} sitterWeight   – sitter weight (lb)
+ * @param {number} sitterCogH     – sitter CoG height above floor (in)
+ * @param {number} chairWeight    – chair weight (lb)
+ * @param {number} chairCogH      – chair CoG height above floor (in)
+ * @returns {number} combined CoG height above floor (in)
+ */
+export function systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH) {
+  if (chairWeight <= 0) {
+    return sitterCogH;
+  }
+  const totalWeight = sitterWeight + chairWeight;
+  return (sitterWeight * sitterCogH + chairWeight * chairCogH) / totalWeight;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Top-level model builder                                           */
 /* ------------------------------------------------------------------ */
 
 /**
- * Build a complete rocker model from the three chair parameters and
- * three sitter parameters.
+ * Build a complete rocker model from the chair parameters,
+ * sitter parameters, and chair weight.
+ *
+ * The physics uses the combined centre-of-gravity of both the chair
+ * structure and the sitter.  Ignoring chair mass (the old behaviour)
+ * overestimates the system CoG and produces unrealistically long
+ * periods, especially when the sitter CoG is close to the arc centre.
  *
  * @param {object} params
- * @param {number} params.radius      – rocker curve radius (in)
- * @param {number} params.seatHeight  – seat height off floor when level (in)
- * @param {number} params.seatDepth   – seat midpoint to backrest (in)
+ * @param {number} params.radius       – rocker curve radius (in)
+ * @param {number} params.seatHeight   – seat height off floor when level (in)
+ * @param {number} params.seatDepth    – seat midpoint to backrest (in)
  * @param {number} params.backrestAngle – backrest angle from seat (degrees, 90 = vertical)
  * @param {number} params.sitterWeight – pounds
  * @param {number} params.sitterHeight – inches
  * @param {"male"|"female"} params.sitterGender
+ * @param {number} [params.chairWeight=0] – chair weight (lb); 0 ignores it
  * @param {number} [params.cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
  * @returns {object} model with derived quantities and a `angleAt(t)` function
  */
 export function buildRockerModel(params) {
   const { radius, seatHeight, seatDepth, backrestAngle = 100,
           sitterWeight, sitterHeight, sitterGender,
-          cogOffsetX = 0 } = params;
+          chairWeight = 0, cogOffsetX = 0 } = params;
 
-  const cogAboveSeat = sitterCogAboveSeat(sitterHeight, sitterGender);
-  const cogHeight = seatHeight + cogAboveSeat;
+  // Sitter CoG
+  const sitterCogAbove = sitterCogAboveSeat(sitterHeight, sitterGender);
+  const sitterCogH = seatHeight + sitterCogAbove;
+
+  // Chair CoG (estimated from geometry)
+  const chairCogH = estimateChairCogHeight(seatHeight);
+
+  // Combined system CoG — used for the rolling-body physics
+  const cogHeight = systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH);
+  const cogAboveSeat = cogHeight - seatHeight;
+
   const lEff = effectivePendulumLength(radius, cogHeight);
   const period = rockingPeriod(lEff);
   const damping = estimateDamping(sitterWeight);
   const stable = lEff > 0;
-  const initialAmplitude = Math.PI / 12; // 15° starting push
+  // Constant-energy push: a given kick tilts a tight-radius rocker much
+  // further than a flat one.  Calibrated so R ≈ 42″ with a typical sitter
+  // gives ~15°.  Capped at 30° to stay in the small-angle regime.
+  const baseAmplitude = Math.PI / 12;
+  const referenceGap = 16; // inches — typical gap at R = 42″
+  const initialAmplitude = stable
+    ? Math.min(Math.PI / 6, baseAmplitude * Math.sqrt(referenceGap / (radius - cogHeight)))
+    : 0;
   const thetaEq = stable
     ? equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX)
     : 0;
@@ -273,6 +330,7 @@ export function buildRockerModel(params) {
     sitterHeight,
     cogAboveSeat,
     cogHeight,
+    chairWeight,
     cogOffsetX,
     lEff,
     period,

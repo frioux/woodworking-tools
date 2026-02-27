@@ -12,7 +12,7 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 /*  DOM references                                                    */
 /* ------------------------------------------------------------------ */
 
-const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "backrest-angle"];
+const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
 const POSTURE_IDS = ["posture", "cog-offset-x"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
@@ -23,6 +23,7 @@ const URL_KEYS = {
   "seat-height": "sh",
   "seat-depth": "sd",
   "backrest-angle": "ba",
+  "chair-weight": "cw",
   "sitter-weight": "sw",
   "sitter-height": "sth",
   "sitter-gender": "sg",
@@ -224,7 +225,7 @@ function stopAnimation() {
 function restartAnimation() {
   stopAnimation();
   if (currentModel) {
-    renderDiagram(0);
+    renderDiagram(currentModel.thetaEq);
   }
 }
 
@@ -253,6 +254,7 @@ function update(updateURL = true) {
     seatHeight: vals["seat-height"],
     seatDepth: vals["seat-depth"],
     backrestAngle: vals["backrest-angle"],
+    chairWeight: vals["chair-weight"],
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],

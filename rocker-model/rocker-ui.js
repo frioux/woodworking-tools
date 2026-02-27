@@ -12,7 +12,7 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 /*  DOM references                                                    */
 /* ------------------------------------------------------------------ */
 
-const CHAIR_IDS = ["radius", "seat-height", "seat-depth"];
+const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "backrest-angle"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS];
 
@@ -21,6 +21,7 @@ const URL_KEYS = {
   "radius": "r",
   "seat-height": "sh",
   "seat-depth": "sd",
+  "backrest-angle": "ba",
   "sitter-weight": "sw",
   "sitter-height": "sth",
   "sitter-gender": "sg",
@@ -95,6 +96,10 @@ function validate(vals) {
   }
   if (vals["seat-depth"] <= 0) {
     setError("seat-depth", "Must be positive");
+    ok = false;
+  }
+  if (vals["backrest-angle"] < 70 || vals["backrest-angle"] > 135) {
+    setError("backrest-angle", "Must be 70–135°");
     ok = false;
   }
   if (vals["seat-height"] >= vals["radius"]) {
@@ -243,6 +248,7 @@ function update(updateURL = true) {
     radius: vals["radius"],
     seatHeight: vals["seat-height"],
     seatDepth: vals["seat-depth"],
+    backrestAngle: vals["backrest-angle"],
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],

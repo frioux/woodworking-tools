@@ -7,6 +7,7 @@ const defaults = {
   radius: 42,
   seatHeight: 17,
   seatDepth: 16,
+  backrestAngle: 100,
   sitterWeight: 170,
   sitterHeight: 70,
   sitterGender: 'male',
@@ -30,10 +31,10 @@ describe('renderChairProfile', () => {
     expect(g.tagName).toBe('g');
   });
 
-  it('contains path elements for arc, seat, and backrest', () => {
+  it('contains path elements for arc and seat', () => {
     const g = renderChairProfile(doc, model, 0);
     const paths = g.querySelectorAll('path');
-    expect(paths.length).toBeGreaterThanOrEqual(3);
+    expect(paths.length).toBeGreaterThanOrEqual(2);
   });
 
   it('contains circle elements for CoG and contact point', () => {
@@ -50,10 +51,11 @@ describe('renderChairProfile', () => {
     expect(cogText).toBeTruthy();
   });
 
-  it('contains line elements for legs', () => {
+  it('contains line elements for legs and backrest', () => {
     const g = renderChairProfile(doc, model, 0);
     const lines = g.querySelectorAll('line');
-    expect(lines.length).toBeGreaterThanOrEqual(2);
+    // 1 floor tick + 2 legs + 1 backrest = 4
+    expect(lines.length).toBeGreaterThanOrEqual(4);
   });
 
   it('produces different output at different angles', () => {

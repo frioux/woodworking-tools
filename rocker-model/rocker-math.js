@@ -191,13 +191,14 @@ export function estimateDamping(weightLb) {
  * @param {number} params.radius      – rocker curve radius (in)
  * @param {number} params.seatHeight  – seat height off floor when level (in)
  * @param {number} params.seatDepth   – seat midpoint to backrest (in)
+ * @param {number} params.backrestAngle – backrest angle from seat (degrees, 90 = vertical)
  * @param {number} params.sitterWeight – pounds
  * @param {number} params.sitterHeight – inches
  * @param {"male"|"female"} params.sitterGender
  * @returns {object} model with derived quantities and a `angleAt(t)` function
  */
 export function buildRockerModel(params) {
-  const { radius, seatHeight, seatDepth,
+  const { radius, seatHeight, seatDepth, backrestAngle = 100,
           sitterWeight, sitterHeight, sitterGender } = params;
 
   const cogAboveSeat = sitterCogAboveSeat(sitterHeight, sitterGender);
@@ -212,6 +213,7 @@ export function buildRockerModel(params) {
     radius,
     seatHeight,
     seatDepth,
+    backrestAngle,
     cogAboveSeat,
     cogHeight,
     lEff,

@@ -214,6 +214,8 @@ export function buildRockerModel(params) {
     seatHeight,
     seatDepth,
     backrestAngle,
+    sitterGender,
+    sitterHeight,
     cogAboveSeat,
     cogHeight,
     lEff,

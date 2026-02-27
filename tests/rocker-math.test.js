@@ -239,6 +239,16 @@ describe('buildRockerModel', () => {
     expect(female.cogHeight).toBeLessThan(male.cogHeight);
   });
 
+  it('passes through sitterGender', () => {
+    const m = buildRockerModel({ ...defaults, sitterGender: 'female' });
+    expect(m.sitterGender).toBe('female');
+  });
+
+  it('passes through sitterHeight', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.sitterHeight).toBe(70);
+  });
+
   it('passes through backrestAngle', () => {
     const m = buildRockerModel({ ...defaults, backrestAngle: 110 });
     expect(m.backrestAngle).toBe(110);

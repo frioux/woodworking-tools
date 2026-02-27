@@ -90,16 +90,17 @@ describe('rockerGeometry', () => {
 /*  effectivePendulumLength                                           */
 /* ------------------------------------------------------------------ */
 describe('effectivePendulumLength', () => {
-  it('returns R - cogHeight for stable configuration', () => {
-    expect(effectivePendulumLength(42, 27)).toBeCloseTo(15);
+  it('returns h²/(R - h) for stable configuration', () => {
+    // R=42, h=27 → L_eff = 27²/(42-27) = 729/15 = 48.6
+    expect(effectivePendulumLength(42, 27)).toBeCloseTo(48.6);
   });
 
   it('returns negative when CoG is above arc centre', () => {
     expect(effectivePendulumLength(20, 30)).toBeLessThan(0);
   });
 
-  it('returns zero when CoG equals radius', () => {
-    expect(effectivePendulumLength(30, 30)).toBeCloseTo(0);
+  it('returns negative when CoG equals radius (unstable)', () => {
+    expect(effectivePendulumLength(30, 30)).toBeLessThan(0);
   });
 });
 
@@ -122,10 +123,11 @@ describe('rockingPeriod', () => {
     expect(rockingPeriod(20)).toBeGreaterThan(rockingPeriod(10));
   });
 
-  it('matches expected value for 15-inch effective length', () => {
-    // T = 2π √(15 / 386.09)
-    const expected = 2 * Math.PI * Math.sqrt(15 / 386.09);
-    expect(rockingPeriod(15)).toBeCloseTo(expected);
+  it('matches expected value for given effective length', () => {
+    // T = 2π √(L_eff / g) — formula unchanged; inputs are now larger
+    const lEff = 48.6; // e.g. from effectivePendulumLength(42, 27)
+    const expected = 2 * Math.PI * Math.sqrt(lEff / 386.09);
+    expect(rockingPeriod(lEff)).toBeCloseTo(expected);
   });
 });
 

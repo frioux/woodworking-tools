@@ -67,10 +67,10 @@ export function renderChairProfile(doc, model, theta) {
   const s = SCALE;
 
   // --- Rocker arc (the curved runner) ---
-  // Size the runner from the chair geometry: total chord ≈ 2× seat depth,
-  // giving a 28–34″ runner for typical seat depths — matching real chairs.
-  const runnerHalfChord = seatDepth;
-  const arcAngle = Math.asin(Math.min(runnerHalfChord / radius, 0.95));
+  // Draw a generous portion of the arc so rolling on the floor is visible.
+  // The physical rocker spans ±arcAngle from the body bottom.  The body
+  // bottom is at world-frame angle −θ from vertical (CW rotation).
+  const arcAngle = Math.PI / 3.2;
   const arcGroup = svgEl(doc, "g");
 
   const steps = 40;

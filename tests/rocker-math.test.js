@@ -3,11 +3,13 @@ import {
   sitterCogAboveSeat,
   sitterMass,
   rockerGeometry,
+  equilibriumAngle,
   effectivePendulumLength,
   rockingPeriod,
   rockingAngle,
   estimateDamping,
   buildRockerModel,
+  POSTURE_PRESETS,
 } from '../rocker-model/rocker-math.js';
 
 /* ------------------------------------------------------------------ */
@@ -83,6 +85,79 @@ describe('rockerGeometry', () => {
   it('arc centre is at height = radius when level', () => {
     const g = rockerGeometry(42, 17, 16, 10, 0);
     expect(g.arcCenterY).toBeCloseTo(42);
+  });
+
+  it('defaults cogOffsetX to 0 (CoG above seat centre)', () => {
+    const g = rockerGeometry(42, 17, 16, 10, 0);
+    // With cogOffsetX=0, CoG should be directly above seat midpoint
+    expect(g.cogX).toBeCloseTo(0);
+  });
+
+  it('shifts CoG forward with positive cogOffsetX', () => {
+    const g0 = rockerGeometry(42, 17, 16, 10, 0, 0);
+    const gFwd = rockerGeometry(42, 17, 16, 10, 0, 3);
+    expect(gFwd.cogX).toBeGreaterThan(g0.cogX);
+  });
+
+  it('shifts CoG backward with negative cogOffsetX', () => {
+    const g0 = rockerGeometry(42, 17, 16, 10, 0, 0);
+    const gBack = rockerGeometry(42, 17, 16, 10, 0, -3);
+    expect(gBack.cogX).toBeLessThan(g0.cogX);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  equilibriumAngle                                                  */
+/* ------------------------------------------------------------------ */
+describe('equilibriumAngle', () => {
+  it('returns 0 when cogOffsetX is 0', () => {
+    expect(equilibriumAngle(42, 17, 10, 0)).toBeCloseTo(0);
+  });
+
+  it('returns positive (backward lean) for positive offset', () => {
+    // Positive cogOffsetX = CoG forward → chair leans backward at rest
+    const angle = equilibriumAngle(42, 17, 10, 3);
+    expect(angle).toBeGreaterThan(0);
+  });
+
+  it('returns negative (forward lean) for negative offset', () => {
+    // Negative cogOffsetX = CoG backward → chair leans forward at rest
+    const angle = equilibriumAngle(42, 17, 10, -3);
+    expect(angle).toBeLessThan(0);
+  });
+
+  it('returns 0 when CoG is at or above arc centre', () => {
+    // seatHeight + cogAboveSeat >= radius → unstable
+    expect(equilibriumAngle(20, 18, 5, 3)).toBeCloseTo(0);
+  });
+
+  it('larger offset gives larger equilibrium angle', () => {
+    const small = Math.abs(equilibriumAngle(42, 17, 10, 1));
+    const large = Math.abs(equilibriumAngle(42, 17, 10, 5));
+    expect(large).toBeGreaterThan(small);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  POSTURE_PRESETS                                                   */
+/* ------------------------------------------------------------------ */
+describe('POSTURE_PRESETS', () => {
+  it('contains a neutral preset at offset 0', () => {
+    expect(POSTURE_PRESETS.neutral).toBeDefined();
+    expect(POSTURE_PRESETS.neutral.cogOffsetX).toBe(0);
+  });
+
+  it('has a label for each preset', () => {
+    for (const [, preset] of Object.entries(POSTURE_PRESETS)) {
+      expect(typeof preset.label).toBe('string');
+      expect(preset.label.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('has a numeric cogOffsetX for each preset', () => {
+    for (const [, preset] of Object.entries(POSTURE_PRESETS)) {
+      expect(typeof preset.cogOffsetX).toBe('number');
+    }
   });
 });
 
@@ -208,15 +283,15 @@ describe('buildRockerModel', () => {
     expect(m.period).toBe(Infinity);
   });
 
-  it('has an angleAt function that returns amplitude at t=0', () => {
+  it('has an angleAt function that returns equilibrium + amplitude at t=0', () => {
     const m = buildRockerModel(defaults);
-    expect(m.angleAt(0)).toBeCloseTo(m.initialAmplitude);
+    expect(m.angleAt(0)).toBeCloseTo(m.thetaEq + m.initialAmplitude);
   });
 
   it('has a geometryAt function returning geometry', () => {
     const m = buildRockerModel(defaults);
     const g = m.geometryAt(0);
-    expect(g.theta).toBeCloseTo(m.initialAmplitude);
+    expect(g.theta).toBeCloseTo(m.thetaEq + m.initialAmplitude);
     expect(g.seatY).toBeDefined();
     expect(g.cogY).toBeDefined();
   });
@@ -260,5 +335,34 @@ describe('buildRockerModel', () => {
       sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
     });
     expect(m.backrestAngle).toBe(100);
+  });
+
+  it('defaults cogOffsetX to 0 when omitted', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.cogOffsetX).toBe(0);
+  });
+
+  it('passes through cogOffsetX', () => {
+    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
+    expect(m.cogOffsetX).toBe(3);
+  });
+
+  it('has thetaEq of 0 with cogOffsetX=0', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.thetaEq).toBeCloseTo(0);
+  });
+
+  it('has non-zero thetaEq with non-zero cogOffsetX', () => {
+    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
+    expect(m.thetaEq).not.toBeCloseTo(0);
+  });
+
+  it('oscillates around thetaEq', () => {
+    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
+    // At t=0, angle = thetaEq + initialAmplitude
+    expect(m.angleAt(0)).toBeCloseTo(m.thetaEq + m.initialAmplitude);
+    // After long time, angle should approach thetaEq (damped)
+    const late = m.angleAt(100);
+    expect(Math.abs(late - m.thetaEq)).toBeLessThan(0.01);
   });
 });

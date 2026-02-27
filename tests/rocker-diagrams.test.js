@@ -160,6 +160,18 @@ describe('renderInfoPanel', () => {
     expect(text).toContain('Natural period');
   });
 
+  it('includes natural tilt info', () => {
+    const dl = renderInfoPanel(doc, model);
+    const text = dl.textContent;
+    expect(text).toContain('Natural tilt');
+  });
+
+  it('includes CoG fore/aft offset info', () => {
+    const dl = renderInfoPanel(doc, model);
+    const text = dl.textContent;
+    expect(text).toContain('CoG fore/aft offset');
+  });
+
   it('marks unstable model appropriately', () => {
     const unstable = buildRockerModel({ ...defaults, radius: 20, seatHeight: 19 });
     const dl = renderInfoPanel(doc, unstable);

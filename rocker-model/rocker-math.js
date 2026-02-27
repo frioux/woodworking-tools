@@ -11,6 +11,22 @@
 const GRAVITY = 386.09; // in/s² (standard gravity in inches)
 
 /* ------------------------------------------------------------------ */
+/*  Posture presets — CoG fore/aft offset from seat centre (inches)   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Predefined posture offsets.  Positive = toward front of chair,
+ * negative = toward backrest.  Values are rough biomechanical estimates.
+ */
+export const POSTURE_PRESETS = {
+  neutral:        { label: "Neutral",         cogOffsetX:  0 },
+  leaningForward: { label: "Leaning forward", cogOffsetX:  4 },
+  legsForward:    { label: "Legs forward",    cogOffsetX:  2 },
+  armsBack:       { label: "Arms back",       cogOffsetX: -2 },
+  reclined:       { label: "Reclined",        cogOffsetX: -4 },
+};
+
+/* ------------------------------------------------------------------ */
 /*  Sitter centre-of-gravity estimation                               */
 /* ------------------------------------------------------------------ */
 
@@ -44,6 +60,39 @@ export function sitterMass(weightLb) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Equilibrium (natural orientation)                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Compute the equilibrium tilt angle — the angle at which the chair
+ * naturally comes to rest with no external push.
+ *
+ * At equilibrium the sitter's CoG is directly above the floor contact
+ * point.  Solving  localCogX·cos(θ) + localCogY·sin(θ) = 0  gives
+ *
+ *   θ_eq = atan(−localCogX / localCogY)
+ *
+ * where localCogY = seatHeight − radius + cogAboveSeat  (typically
+ * negative, meaning the CoG is below the arc centre).
+ *
+ * Returns 0 when the system has no stable resting point (CoG at or
+ * above the arc centre).
+ *
+ * @param {number} radius       – rocker curve radius (in)
+ * @param {number} seatHeight   – seat height when level (in)
+ * @param {number} cogAboveSeat – sitter CoG above seat surface (in)
+ * @param {number} cogOffsetX   – CoG fore/aft offset from seat centre (in)
+ * @returns {number} equilibrium tilt angle (rad, positive = backward lean)
+ */
+export function equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX) {
+  const localCogY = seatHeight - radius + cogAboveSeat;
+  if (localCogY >= 0) {
+    return 0; // CoG at or above arc centre — no stable equilibrium
+  }
+  return Math.atan(-cogOffsetX / localCogY);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Chair geometry helpers                                            */
 /* ------------------------------------------------------------------ */
 
@@ -58,11 +107,12 @@ export function sitterMass(weightLb) {
  * @param {number} seatDepth    – seat depth to backrest (in)
  * @param {number} cogAboveSeat – sitter CoG above seat (in)
  * @param {number} theta        – tilt angle (rad, positive = backward)
+ * @param {number} [cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
  * @returns {{contactX: number, seatX: number, seatY: number,
  *            cogX: number, cogY: number, arcCenterX: number,
  *            arcCenterY: number}}
  */
-export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta) {
+export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX = 0) {
   // For a circle of radius R rolling without slipping on a flat floor:
   //   - contact point shifts by R·θ along floor
   //   - arc centre is always at height R, directly above the contact point
@@ -83,8 +133,8 @@ export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, thet
   const seatX = arcCenterX + localSeatX * Math.cos(theta) + localSeatY * Math.sin(theta);
   const seatY = arcCenterY - localSeatX * Math.sin(theta) + localSeatY * Math.cos(theta);
 
-  // CoG is above the seat midpoint, shifted backward by seatDepth/2
-  const localCogX = -seatDepth / 2;
+  // CoG fore/aft position in local frame (positive = toward front)
+  const localCogX = cogOffsetX;
   const localCogY = seatHeight - radius + cogAboveSeat;
   const cogX = arcCenterX + localCogX * Math.cos(theta) + localCogY * Math.sin(theta);
   const cogY = arcCenterY - localCogX * Math.sin(theta) + localCogY * Math.cos(theta);
@@ -195,11 +245,13 @@ export function estimateDamping(weightLb) {
  * @param {number} params.sitterWeight – pounds
  * @param {number} params.sitterHeight – inches
  * @param {"male"|"female"} params.sitterGender
+ * @param {number} [params.cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
  * @returns {object} model with derived quantities and a `angleAt(t)` function
  */
 export function buildRockerModel(params) {
   const { radius, seatHeight, seatDepth, backrestAngle = 100,
-          sitterWeight, sitterHeight, sitterGender } = params;
+          sitterWeight, sitterHeight, sitterGender,
+          cogOffsetX = 0 } = params;
 
   const cogAboveSeat = sitterCogAboveSeat(sitterHeight, sitterGender);
   const cogHeight = seatHeight + cogAboveSeat;
@@ -208,6 +260,9 @@ export function buildRockerModel(params) {
   const damping = estimateDamping(sitterWeight);
   const stable = lEff > 0;
   const initialAmplitude = Math.PI / 12; // 15° starting push
+  const thetaEq = stable
+    ? equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX)
+    : 0;
 
   return {
     radius,
@@ -218,15 +273,17 @@ export function buildRockerModel(params) {
     sitterHeight,
     cogAboveSeat,
     cogHeight,
+    cogOffsetX,
     lEff,
     period,
     damping,
     stable,
     initialAmplitude,
+    thetaEq,
 
-    /** Angular position at time t (seconds). */
+    /** Angular position at time t (seconds), oscillating around equilibrium. */
     angleAt(t) {
-      return rockingAngle(t, initialAmplitude, lEff, damping);
+      return thetaEq + rockingAngle(t, initialAmplitude, lEff, damping);
     },
 
     /** Full geometry snapshot at time t. */
@@ -234,7 +291,7 @@ export function buildRockerModel(params) {
       const theta = this.angleAt(t);
       return {
         theta,
-        ...rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta),
+        ...rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX),
       };
     },
   };

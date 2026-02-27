@@ -63,36 +63,31 @@ export function sitterMass(weightLb) {
  *            arcCenterY: number}}
  */
 export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta) {
-  // Arc centre when level sits directly above the contact point
-  // at height = radius.  The seat sits atop the arc at height = seatHeight.
-  // When tilted by θ the arc rolls without slipping:
-  //   contact point shifts by R·θ along floor.
+  // For a circle of radius R rolling without slipping on a flat floor:
+  //   - contact point shifts by R·θ along floor
+  //   - arc centre is always at height R, directly above the contact point
+  //   - the chair body rotates clockwise by θ (positive θ = lean back)
 
   const contactX = radius * theta;                       // floor contact
-  const arcCenterX = contactX - radius * Math.sin(theta);
-  const arcCenterY = radius * Math.cos(theta);           // above floor
-
-  // Cleaner model:
-  // When level (θ=0): arc centre is at (0, R). Seat is at (0, seatHeight).
-  // The seat is rigidly attached at a point that is (seatHeight - R) above arc centre
-  // in the chair's local frame — but seatHeight < R typically, so the seat
-  // is *below* the arc centre.  That's fine: the rocker arc is on the bottom.
+  const arcCenterX = contactX;                           // directly above contact
+  const arcCenterY = radius;                             // always at height R
 
   // In the local (chair) frame, seat midpoint = (0, seatHeight - R) relative
-  // to the arc centre.  The backrest / CoG offset along the seat is at
+  // to the arc centre.  seatHeight < R typically, so the seat is *below*
+  // the arc centre.  The backrest / CoG offset along the seat is at
   // local-x = -seatDepth/2  (backward from seat midpoint).
 
-  // Rotate local frame by θ (positive θ = lean back):
+  // Rotate local frame by θ clockwise (positive θ = lean back):
   const localSeatX = 0;
   const localSeatY = seatHeight - radius;
-  const seatX = arcCenterX + localSeatX * Math.cos(theta) - localSeatY * Math.sin(theta);
-  const seatY = arcCenterY + localSeatX * Math.sin(theta) + localSeatY * Math.cos(theta);
+  const seatX = arcCenterX + localSeatX * Math.cos(theta) + localSeatY * Math.sin(theta);
+  const seatY = arcCenterY - localSeatX * Math.sin(theta) + localSeatY * Math.cos(theta);
 
   // CoG is above the seat midpoint, shifted backward by seatDepth/2
   const localCogX = -seatDepth / 2;
   const localCogY = seatHeight - radius + cogAboveSeat;
-  const cogX = arcCenterX + localCogX * Math.cos(theta) - localCogY * Math.sin(theta);
-  const cogY = arcCenterY + localCogX * Math.sin(theta) + localCogY * Math.cos(theta);
+  const cogX = arcCenterX + localCogX * Math.cos(theta) + localCogY * Math.sin(theta);
+  const cogY = arcCenterY - localCogX * Math.sin(theta) + localCogY * Math.cos(theta);
 
   return { contactX, seatX, seatY, cogX, cogY, arcCenterX, arcCenterY };
 }

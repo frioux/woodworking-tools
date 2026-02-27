@@ -226,6 +226,7 @@ describe('buildRockerModel', () => {
     radius: 42,
     seatHeight: 17,
     seatDepth: 16,
+    backrestAngle: 100,
     sitterWeight: 170,
     sitterHeight: 70,
     sitterGender: 'male',
@@ -292,5 +293,28 @@ describe('buildRockerModel', () => {
     // Without chair weight, cogHeight equals sitter-only CoG
     const sitterCogH = 17 + 70 * 0.52 * 0.30; // seatHeight + cogAboveSeat
     expect(m.cogHeight).toBeCloseTo(sitterCogH);
+  });
+
+  it('passes through sitterGender', () => {
+    const m = buildRockerModel({ ...defaults, sitterGender: 'female' });
+    expect(m.sitterGender).toBe('female');
+  });
+
+  it('passes through sitterHeight', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.sitterHeight).toBe(70);
+  });
+
+  it('passes through backrestAngle', () => {
+    const m = buildRockerModel({ ...defaults, backrestAngle: 110 });
+    expect(m.backrestAngle).toBe(110);
+  });
+
+  it('defaults backrestAngle to 100 when omitted', () => {
+    const m = buildRockerModel({
+      radius: 42, seatHeight: 17, seatDepth: 16,
+      sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+    });
+    expect(m.backrestAngle).toBe(100);
   });
 });

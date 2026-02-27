@@ -16,6 +16,8 @@ const COLOR_LEGS     = "#6B4226";   // dark wood
 const COLOR_BACK     = "#7A5C4F";   // backrest
 const COLOR_FLOOR    = "#C8B89A";   // floor line
 const COLOR_COG      = "#CC3333";   // centre of gravity dot
+const COLOR_PERSON   = "#555555";   // stick figure limbs
+const COLOR_TORSO    = "#666666";   // stick figure torso fill
 
 // Drawing scale: 1 inch → this many SVG units
 const SCALE = 4;
@@ -41,6 +43,175 @@ function line(doc, x1, y1, x2, y2, stroke, width = 1, dash) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Local-to-world coordinate transform                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Transform a point from local (chair) frame to world frame.
+ * @returns {[number, number]} [worldX, worldY]
+ */
+function localToWorld(lx, ly, arcCenterX, arcCenterY, theta) {
+  const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
+  const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
+  return [wx, wy];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Stick figure renderer                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Render a stick figure person sitting in the chair.
+ *
+ * The torso is drawn as a triangle whose orientation depends on gender:
+ *   – Male:   inverted triangle (▽) — wider at shoulders (weight up top)
+ *   – Female: upright triangle  (△) — wider at hips (weight lower)
+ *
+ * All geometry is computed in the local (chair) frame and then rotated
+ * into the world frame by θ, just like the rest of the chair.
+ *
+ * @param {object} doc
+ * @param {object} model  – from buildRockerModel()
+ * @param {number} theta  – current tilt angle (rad)
+ * @param {object} geom   – from rockerGeometry()
+ * @returns {SVGGElement}
+ */
+function renderStickFigure(doc, model, theta, geom) {
+  const { radius, seatHeight, seatDepth, backrestAngle,
+          sitterGender, sitterHeight } = model;
+  const { arcCenterX, arcCenterY } = geom;
+  const s = SCALE;
+  const g = svgEl(doc, "g");
+
+  // Seat surface in local frame (top of seat plank)
+  const seatThickness = 1;
+  const seatSurfaceY = seatHeight - radius + seatThickness;
+
+  // Sitting height and body proportions (all in inches, local frame)
+  const sittingHt = sitterHeight * 0.52;
+  const headR     = sittingHt * 0.07;
+  const torsoLen  = sittingHt * 0.38;
+  const torsoHalfW = sittingHt * 0.08;
+
+  // Lean angle: how far the torso tilts back from vertical.
+  // backrestAngle is degrees from horizontal seat surface; 90 = vertical.
+  const leanRad = ((backrestAngle || 100) - 90) * Math.PI / 180;
+
+  // Hip position — slightly back from seat centre
+  const hipLX = -seatDepth * 0.15;
+  const hipLY = seatSurfaceY;
+
+  // Shoulder position — torso extends upward, leaning back
+  const shoulderLX = hipLX - torsoLen * Math.sin(leanRad);
+  const shoulderLY = hipLY + torsoLen * Math.cos(leanRad);
+
+  // Head centre — above shoulders along the same lean axis
+  const headLX = shoulderLX - (headR * 2) * Math.sin(leanRad);
+  const headLY = shoulderLY + (headR * 2) * Math.cos(leanRad);
+
+  // --- Torso triangle ---
+  // Perpendicular to torso axis (for triangle width)
+  const tDx = shoulderLX - hipLX;
+  const tDy = shoulderLY - hipLY;
+  const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
+  const perpX = -tDy / tLen;
+  const perpY = tDx / tLen;
+
+  let triLocal;
+  if (sitterGender === "female") {
+    // △ — wider at hips, narrow at shoulders
+    triLocal = [
+      [shoulderLX, shoulderLY],
+      [hipLX + perpX * torsoHalfW, hipLY + perpY * torsoHalfW],
+      [hipLX - perpX * torsoHalfW, hipLY - perpY * torsoHalfW],
+    ];
+  } else {
+    // ▽ — wider at shoulders, narrow at hips (default / male)
+    triLocal = [
+      [shoulderLX + perpX * torsoHalfW, shoulderLY + perpY * torsoHalfW],
+      [shoulderLX - perpX * torsoHalfW, shoulderLY - perpY * torsoHalfW],
+      [hipLX, hipLY],
+    ];
+  }
+
+  let triPath = "";
+  for (let i = 0; i < triLocal.length; i++) {
+    const [wx, wy] = localToWorld(triLocal[i][0], triLocal[i][1],
+                                   arcCenterX, arcCenterY, theta);
+    triPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
+  }
+  triPath += "Z";
+  g.appendChild(svgEl(doc, "path", {
+    d: triPath,
+    fill: COLOR_TORSO,
+    stroke: COLOR_PERSON,
+    "stroke-width": 1.5,
+    opacity: 0.7,
+    "data-testid": "stick-torso",
+  }));
+
+  // --- Head ---
+  const [headWX, headWY] = localToWorld(headLX, headLY,
+                                         arcCenterX, arcCenterY, theta);
+  g.appendChild(svgEl(doc, "circle", {
+    cx: headWX * s,
+    cy: -headWY * s,
+    r: headR * s,
+    fill: "none",
+    stroke: COLOR_PERSON,
+    "stroke-width": 2,
+    "data-testid": "stick-head",
+  }));
+
+  // --- Neck (shoulder to head base) ---
+  const [shoulderWX, shoulderWY] = localToWorld(shoulderLX, shoulderLY,
+                                                 arcCenterX, arcCenterY, theta);
+  const neckBaseLX = shoulderLX - headR * 0.3 * Math.sin(leanRad);
+  const neckBaseLY = shoulderLY + headR * 0.3 * Math.cos(leanRad);
+  const [neckWX, neckWY] = localToWorld(neckBaseLX, neckBaseLY,
+                                         arcCenterX, arcCenterY, theta);
+  g.appendChild(line(doc, shoulderWX * s, -shoulderWY * s,
+                          neckWX * s, -neckWY * s, COLOR_PERSON, 2));
+
+  // --- Upper legs (hips to knees, along the seat) ---
+  const kneeLX = seatDepth * 0.35;
+  const kneeLY = seatSurfaceY;
+  const [hipWX, hipWY] = localToWorld(hipLX, hipLY,
+                                       arcCenterX, arcCenterY, theta);
+  const [kneeWX, kneeWY] = localToWorld(kneeLX, kneeLY,
+                                         arcCenterX, arcCenterY, theta);
+  g.appendChild(line(doc, hipWX * s, -hipWY * s,
+                          kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
+
+  // --- Lower legs (knees hanging down toward floor) ---
+  // Floor in local frame is at y = -radius; feet stop a couple inches above
+  const footLX = kneeLX + 1;
+  const footLY = -radius + 2;
+  const [footWX, footWY] = localToWorld(footLX, footLY,
+                                         arcCenterX, arcCenterY, theta);
+  g.appendChild(line(doc, kneeWX * s, -kneeWY * s,
+                          footWX * s, -footWY * s, COLOR_PERSON, 2));
+
+  // --- Upper arm (shoulder forward/down toward lap) ---
+  const elbowLX = hipLX + seatDepth * 0.15;
+  const elbowLY = seatSurfaceY + torsoLen * 0.2;
+  const [elbowWX, elbowWY] = localToWorld(elbowLX, elbowLY,
+                                           arcCenterX, arcCenterY, theta);
+  g.appendChild(line(doc, shoulderWX * s, -shoulderWY * s,
+                          elbowWX * s, -elbowWY * s, COLOR_PERSON, 2));
+
+  // --- Forearm (elbow to lap/knee area) ---
+  const handLX = kneeLX * 0.5;
+  const handLY = seatSurfaceY + 1;
+  const [handWX, handWY] = localToWorld(handLX, handLY,
+                                         arcCenterX, arcCenterY, theta);
+  g.appendChild(line(doc, elbowWX * s, -elbowWY * s,
+                          handWX * s, -handWY * s, COLOR_PERSON, 2));
+
+  return g;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Static chair profile renderer                                     */
 /* ------------------------------------------------------------------ */
 
@@ -58,7 +229,7 @@ function line(doc, x1, y1, x2, y2, stroke, width = 1, dash) {
  * @returns {SVGGElement}
  */
 export function renderChairProfile(doc, model, theta) {
-  const { radius, seatHeight, seatDepth, cogAboveSeat } = model;
+  const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat } = model;
   const g = svgEl(doc, "g");
 
   const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta);
@@ -123,55 +294,44 @@ export function renderChairProfile(doc, model, theta) {
   }
 
   // --- Seat ---
-  // A horizontal plank in the chair's local frame, from front to back leg
+  // A horizontal line in the chair's local frame, from front to back
   const seatHalfLen = seatDepth * 0.7; // seat extends a bit past the legs
-  const seatThickness = 1; // 1 inch thick
-  const seatCorners = [
+
+  const seatEnds = [
     [-seatHalfLen, legTopLocalY],
     [seatHalfLen, legTopLocalY],
-    [seatHalfLen, legTopLocalY + seatThickness],
-    [-seatHalfLen, legTopLocalY + seatThickness],
   ];
+  const seatWorld = seatEnds.map(([lx, ly]) => [
+    arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta),
+    arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta),
+  ]);
+  g.appendChild(line(doc,
+    seatWorld[0][0] * s, -seatWorld[0][1] * s,
+    seatWorld[1][0] * s, -seatWorld[1][1] * s,
+    COLOR_SEAT, 3));
 
-  let seatPath = "";
-  for (let i = 0; i < seatCorners.length; i++) {
-    const [lx, ly] = seatCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
-    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
-    seatPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
-  }
-  seatPath += "Z";
-  g.appendChild(svgEl(doc, "path", {
-    d: seatPath,
-    fill: COLOR_SEAT,
-    stroke: COLOR_ROCKER,
-    "stroke-width": 1.5,
-  }));
+  // --- Backrest (straight line from rear seat edge) ---
+  const backH = seatDepth * 1.05; // backrest slightly longer than seat depth
+  // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
+  // In the local frame the seat is horizontal, so the angle from the +x axis
+  // (pointing forward) to the backrest direction equals the backrestAngle directly.
+  const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
+  const localBaseX = -seatHalfLen;
+  const localBaseY = legTopLocalY;
+  const localTopX = localBaseX + backH * Math.cos(backAngleRad);
+  const localTopY = localBaseY + backH * Math.sin(backAngleRad);
 
-  // --- Backrest ---
-  const backW = 1;  // 1 inch thick
-  const backH = seatDepth * 0.6; // backrest height proportional to seat depth
-  const backCorners = [
-    [-seatHalfLen, legTopLocalY + seatThickness],
-    [-seatHalfLen + backW, legTopLocalY + seatThickness],
-    [-seatHalfLen + backW + 2, legTopLocalY + seatThickness + backH], // slight lean back
-    [-seatHalfLen, legTopLocalY + seatThickness + backH],
-  ];
+  // Rotate into world frame
+  const backBaseWX = arcCenterX + localBaseX * Math.cos(theta) + localBaseY * Math.sin(theta);
+  const backBaseWY = arcCenterY - localBaseX * Math.sin(theta) + localBaseY * Math.cos(theta);
+  const backTopWX = arcCenterX + localTopX * Math.cos(theta) + localTopY * Math.sin(theta);
+  const backTopWY = arcCenterY - localTopX * Math.sin(theta) + localTopY * Math.cos(theta);
 
-  let backPath = "";
-  for (let i = 0; i < backCorners.length; i++) {
-    const [lx, ly] = backCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
-    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
-    backPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
-  }
-  backPath += "Z";
-  g.appendChild(svgEl(doc, "path", {
-    d: backPath,
-    fill: COLOR_BACK,
-    stroke: COLOR_ROCKER,
-    "stroke-width": 1,
-  }));
+  g.appendChild(line(doc, backBaseWX * s, -backBaseWY * s,
+    backTopWX * s, -backTopWY * s, COLOR_BACK, 3));
+
+  // --- Stick figure (sitter) ---
+  g.appendChild(renderStickFigure(doc, model, theta, geom));
 
   // --- Centre of gravity marker ---
   g.appendChild(svgEl(doc, "circle", {

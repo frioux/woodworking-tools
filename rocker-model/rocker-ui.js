@@ -327,9 +327,12 @@ function init() {
   syncPostureFromOffset();
 
   // Wire all inputs
+  // <select> elements fire "change" reliably across all browsers;
+  // "input" on <select> is not supported in older Safari / Firefox.
   for (const id of ALL_IDS) {
     const el = document.getElementById(id);
-    el.addEventListener("input", () => {
+    const evt = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(evt, () => {
       // Posture dropdown → set offset, then update
       if (id === "posture") {
         applyPosture(el.value);

@@ -123,30 +123,21 @@ export function renderChairProfile(doc, model, theta) {
   }
 
   // --- Seat ---
-  // A horizontal plank in the chair's local frame, from front to back leg
+  // A horizontal line in the chair's local frame, from front to back
   const seatHalfLen = seatDepth * 0.7; // seat extends a bit past the legs
-  const seatThickness = 1; // 1 inch thick
-  const seatCorners = [
+
+  const seatEnds = [
     [-seatHalfLen, legTopLocalY],
     [seatHalfLen, legTopLocalY],
-    [seatHalfLen, legTopLocalY + seatThickness],
-    [-seatHalfLen, legTopLocalY + seatThickness],
   ];
-
-  let seatPath = "";
-  for (let i = 0; i < seatCorners.length; i++) {
-    const [lx, ly] = seatCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
-    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
-    seatPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
-  }
-  seatPath += "Z";
-  g.appendChild(svgEl(doc, "path", {
-    d: seatPath,
-    fill: COLOR_SEAT,
-    stroke: COLOR_ROCKER,
-    "stroke-width": 1.5,
-  }));
+  const seatWorld = seatEnds.map(([lx, ly]) => [
+    arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta),
+    arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta),
+  ]);
+  g.appendChild(line(doc,
+    seatWorld[0][0] * s, -seatWorld[0][1] * s,
+    seatWorld[1][0] * s, -seatWorld[1][1] * s,
+    COLOR_SEAT, 3));
 
   // --- Backrest (straight line from rear seat edge) ---
   const backH = seatDepth * 0.6; // backrest length proportional to seat depth
@@ -155,7 +146,7 @@ export function renderChairProfile(doc, model, theta) {
   // (pointing forward) to the backrest direction equals the backrestAngle directly.
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
   const localBaseX = -seatHalfLen;
-  const localBaseY = legTopLocalY + seatThickness;
+  const localBaseY = legTopLocalY;
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);
   const localTopY = localBaseY + backH * Math.sin(backAngleRad);
 

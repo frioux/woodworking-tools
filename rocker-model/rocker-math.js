@@ -257,7 +257,14 @@ export function buildRockerModel(params) {
   const period = rockingPeriod(lEff);
   const damping = estimateDamping(sitterWeight);
   const stable = lEff > 0;
-  const initialAmplitude = Math.PI / 12; // 15° starting push
+  // Constant-energy push: a given kick tilts a tight-radius rocker much
+  // further than a flat one.  Calibrated so R ≈ 42″ with a typical sitter
+  // gives ~15°.  Capped at 30° to stay in the small-angle regime.
+  const baseAmplitude = Math.PI / 12;
+  const referenceGap = 16; // inches — typical gap at R = 42″
+  const initialAmplitude = stable
+    ? Math.min(Math.PI / 6, baseAmplitude * Math.sqrt(referenceGap / (radius - cogHeight)))
+    : 0;
 
   return {
     radius,

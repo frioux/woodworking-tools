@@ -264,6 +264,9 @@ export function renderInfoPanel(doc, model) {
     ["Effective pendulum length", `${model.lEff.toFixed(1)} in`],
     ["Natural period", model.stable ? `${model.period.toFixed(2)} s` : "Unstable"],
     ["Rocks per minute", model.stable ? `${(60 / model.period).toFixed(1)}` : "—"],
+    ["Seat swing", model.stable
+      ? `± ${(model.seatHeight * model.initialAmplitude).toFixed(1)} in`
+      : "—"],
     ["System CoG above floor", `${model.cogHeight.toFixed(1)} in`],
     ["Gap (R − CoG)", `${(model.radius - model.cogHeight).toFixed(1)} in`],
     ["Damping ratio", model.damping.toFixed(3)],

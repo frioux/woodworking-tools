@@ -31,10 +31,10 @@ describe('renderChairProfile', () => {
     expect(g.tagName).toBe('g');
   });
 
-  it('contains path elements for arc and seat', () => {
+  it('contains a path element for the arc', () => {
     const g = renderChairProfile(doc, model, 0);
     const paths = g.querySelectorAll('path');
-    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(paths.length).toBeGreaterThanOrEqual(1);
   });
 
   it('contains circle elements for CoG and contact point', () => {
@@ -51,11 +51,11 @@ describe('renderChairProfile', () => {
     expect(cogText).toBeTruthy();
   });
 
-  it('contains line elements for legs and backrest', () => {
+  it('contains line elements for legs, seat, and backrest', () => {
     const g = renderChairProfile(doc, model, 0);
     const lines = g.querySelectorAll('line');
-    // 1 floor tick + 2 legs + 1 backrest = 4
-    expect(lines.length).toBeGreaterThanOrEqual(4);
+    // 1 floor tick + 2 legs + 1 seat + 1 backrest = 5
+    expect(lines.length).toBeGreaterThanOrEqual(5);
   });
 
   it('produces different output at different angles', () => {

@@ -58,7 +58,7 @@ function line(doc, x1, y1, x2, y2, stroke, width = 1, dash) {
  * @returns {SVGGElement}
  */
 export function renderChairProfile(doc, model, theta) {
-  const { radius, seatHeight, seatDepth, cogAboveSeat } = model;
+  const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat } = model;
   const g = svgEl(doc, "g");
 
   const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta);
@@ -148,30 +148,25 @@ export function renderChairProfile(doc, model, theta) {
     "stroke-width": 1.5,
   }));
 
-  // --- Backrest ---
-  const backW = 1;  // 1 inch thick
-  const backH = seatDepth * 0.6; // backrest height proportional to seat depth
-  const backCorners = [
-    [-seatHalfLen, legTopLocalY + seatThickness],
-    [-seatHalfLen + backW, legTopLocalY + seatThickness],
-    [-seatHalfLen + backW + 2, legTopLocalY + seatThickness + backH], // slight lean back
-    [-seatHalfLen, legTopLocalY + seatThickness + backH],
-  ];
+  // --- Backrest (straight line from rear seat edge) ---
+  const backH = seatDepth * 0.6; // backrest length proportional to seat depth
+  // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
+  // In the local frame the seat is horizontal, so the angle from the +x axis
+  // (pointing forward) to the backrest direction is (180 − backrestAngle).
+  const backAngleRad = (180 - (backrestAngle || 100)) * Math.PI / 180;
+  const localBaseX = -seatHalfLen;
+  const localBaseY = legTopLocalY + seatThickness;
+  const localTopX = localBaseX + backH * Math.cos(backAngleRad);
+  const localTopY = localBaseY + backH * Math.sin(backAngleRad);
 
-  let backPath = "";
-  for (let i = 0; i < backCorners.length; i++) {
-    const [lx, ly] = backCorners[i];
-    const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
-    const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
-    backPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
-  }
-  backPath += "Z";
-  g.appendChild(svgEl(doc, "path", {
-    d: backPath,
-    fill: COLOR_BACK,
-    stroke: COLOR_ROCKER,
-    "stroke-width": 1,
-  }));
+  // Rotate into world frame
+  const backBaseWX = arcCenterX + localBaseX * Math.cos(theta) + localBaseY * Math.sin(theta);
+  const backBaseWY = arcCenterY - localBaseX * Math.sin(theta) + localBaseY * Math.cos(theta);
+  const backTopWX = arcCenterX + localTopX * Math.cos(theta) + localTopY * Math.sin(theta);
+  const backTopWY = arcCenterY - localTopX * Math.sin(theta) + localTopY * Math.cos(theta);
+
+  g.appendChild(line(doc, backBaseWX * s, -backBaseWY * s,
+    backTopWX * s, -backTopWY * s, COLOR_BACK, 3));
 
   // --- Centre of gravity marker ---
   g.appendChild(svgEl(doc, "circle", {

@@ -149,7 +149,7 @@ export function renderChairProfile(doc, model, theta) {
   }));
 
   // --- Backrest (straight line from rear seat edge) ---
-  const backH = seatDepth * 0.6; // backrest length proportional to seat depth
+  const backH = seatDepth * 1.05; // backrest slightly longer than seat depth
   // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
   // In the local frame the seat is horizontal, so the angle from the +x axis
   // (pointing forward) to the backrest direction equals the backrestAngle directly.

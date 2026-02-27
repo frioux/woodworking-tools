@@ -12,7 +12,7 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 /*  DOM references                                                    */
 /* ------------------------------------------------------------------ */
 
-const CHAIR_IDS = ["radius", "seat-height", "seat-depth"];
+const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS];
 
@@ -21,6 +21,7 @@ const URL_KEYS = {
   "radius": "r",
   "seat-height": "sh",
   "seat-depth": "sd",
+  "chair-weight": "cw",
   "sitter-weight": "sw",
   "sitter-height": "sth",
   "sitter-gender": "sg",
@@ -243,6 +244,7 @@ function update(updateURL = true) {
     radius: vals["radius"],
     seatHeight: vals["seat-height"],
     seatDepth: vals["seat-depth"],
+    chairWeight: vals["chair-weight"],
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],

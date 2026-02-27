@@ -7,6 +7,8 @@ import {
   rockingPeriod,
   rockingAngle,
   estimateDamping,
+  estimateChairCogHeight,
+  systemCogHeight,
   buildRockerModel,
 } from '../rocker-model/rocker-math.js';
 
@@ -183,6 +185,40 @@ describe('estimateDamping', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  estimateChairCogHeight                                            */
+/* ------------------------------------------------------------------ */
+describe('estimateChairCogHeight', () => {
+  it('returns ⅔ of seat height', () => {
+    expect(estimateChairCogHeight(18)).toBeCloseTo(12);
+  });
+
+  it('scales with seat height', () => {
+    expect(estimateChairCogHeight(20)).toBeGreaterThan(estimateChairCogHeight(15));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  systemCogHeight                                                   */
+/* ------------------------------------------------------------------ */
+describe('systemCogHeight', () => {
+  it('returns sitter CoG when chair weight is zero', () => {
+    expect(systemCogHeight(170, 28, 0, 12)).toBeCloseTo(28);
+  });
+
+  it('returns weighted average of sitter and chair CoG', () => {
+    // sitter 170 lb at 28", chair 30 lb at 12"
+    // combined = (170*28 + 30*12) / 200 = (4760+360)/200 = 25.6
+    expect(systemCogHeight(170, 28, 30, 12)).toBeCloseTo(25.6);
+  });
+
+  it('adding chair mass lowers the combined CoG', () => {
+    const sitterOnly = systemCogHeight(170, 28, 0, 12);
+    const withChair = systemCogHeight(170, 28, 25, 12);
+    expect(withChair).toBeLessThan(sitterOnly);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  buildRockerModel                                                  */
 /* ------------------------------------------------------------------ */
 describe('buildRockerModel', () => {
@@ -236,5 +272,25 @@ describe('buildRockerModel', () => {
     const male = buildRockerModel({ ...defaults, sitterGender: 'male' });
     const female = buildRockerModel({ ...defaults, sitterGender: 'female' });
     expect(female.cogHeight).toBeLessThan(male.cogHeight);
+  });
+
+  it('including chair weight lowers the system CoG', () => {
+    const noChair = buildRockerModel(defaults);
+    const withChair = buildRockerModel({ ...defaults, chairWeight: 25 });
+    expect(withChair.cogHeight).toBeLessThan(noChair.cogHeight);
+  });
+
+  it('including chair weight shortens the period', () => {
+    const noChair = buildRockerModel(defaults);
+    const withChair = buildRockerModel({ ...defaults, chairWeight: 25 });
+    expect(withChair.period).toBeLessThan(noChair.period);
+  });
+
+  it('defaults to zero chair weight for backward compatibility', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.chairWeight).toBe(0);
+    // Without chair weight, cogHeight equals sitter-only CoG
+    const sitterCogH = 17 + 70 * 0.52 * 0.30; // seatHeight + cogAboveSeat
+    expect(m.cogHeight).toBeCloseTo(sitterCogH);
   });
 });

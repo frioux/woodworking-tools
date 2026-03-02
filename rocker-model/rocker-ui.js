@@ -60,6 +60,20 @@ function readInputs() {
   return vals;
 }
 
+function formatFeetInches(totalInches) {
+  const feet = Math.floor(totalInches / 12);
+  const inches = totalInches % 12;
+  return `${feet}' ${inches}"`;
+}
+
+function updateHeightDisplay() {
+  const display = document.getElementById("sitter-height-display");
+  const input = document.getElementById("sitter-height");
+  if (display && input) {
+    display.textContent = formatFeetInches(parseInt(input.value, 10) || 0);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Validation                                                        */
 /* ------------------------------------------------------------------ */
@@ -160,6 +174,7 @@ function loadFromURL() {
 
 function onPopState() {
   loadFromURL();
+  updateHeightDisplay();
   syncPostureFromOffset();
   update(false);
   restartAnimation();
@@ -373,6 +388,7 @@ function syncPostureFromOffset() {
 
 function init() {
   loadFromURL();
+  updateHeightDisplay();
 
   // Sync posture dropdown from the loaded cogOffsetX
   syncPostureFromOffset();
@@ -405,6 +421,8 @@ function init() {
   }
 
   wireSteppers();
+
+  document.getElementById("sitter-height").addEventListener("input", updateHeightDisplay);
 
   // Play/pause button
   const playBtn = document.getElementById("play-btn");

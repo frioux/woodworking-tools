@@ -88,7 +88,7 @@ function renderStickFigure(doc, model, theta, geom) {
   const seatSurfaceY = seatHeight - radius + seatThickness;
 
   // Front edge of the seat in local frame
-  const seatHalfLen = seatDepth * 0.7;
+  const seatHalfLen = seatDepth / 2; // seat spans the full seatDepth
 
   // Sitting height and body proportions (all in inches, local frame)
   const sittingHt = sitterHeight * 0.52;
@@ -322,7 +322,7 @@ export function renderChairProfile(doc, model, theta) {
 
   // --- Seat ---
   // A horizontal line in the chair's local frame, from front to back
-  const seatHalfLen = seatDepth * 0.7; // seat extends a bit past the legs
+  const seatHalfLen = seatDepth / 2; // seat spans the full seatDepth
 
   const seatEnds = [
     [-seatHalfLen, legTopLocalY],
@@ -344,7 +344,7 @@ export function renderChairProfile(doc, model, theta) {
   // (pointing forward) to the backrest direction equals the backrestAngle directly.
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
   const localBaseX = -seatHalfLen;
-  const localBaseY = legTopLocalY;
+  const localBaseY = legTopLocalY + 1; // start from seat surface (1" above seat bottom)
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);
   const localTopY = localBaseY + backH * Math.sin(backAngleRad);
 

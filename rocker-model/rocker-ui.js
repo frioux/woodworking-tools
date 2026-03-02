@@ -213,8 +213,7 @@ function animationFrame(timestamp) {
 
   let theta;
   if (transitionAmplitude !== null && currentModel.stable) {
-    const omega = 2 * Math.PI / currentModel.period;
-    const envelope = Math.abs(transitionAmplitude) * Math.exp(-currentModel.damping * omega * elapsed);
+    const envelope = Math.abs(transitionAmplitude) * Math.exp(-4.0 * elapsed);
     // Auto-stop when the oscillation envelope falls below half a degree (~0.009 rad)
     if (envelope < 0.009) {
       renderDiagram(currentModel.thetaEq);

@@ -5,7 +5,7 @@
  * Manages animation loop, URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel, POSTURE_PRESETS, rockingAngle } from "./rocker-math.js";
+import { buildRockerModel, POSTURE_PRESETS } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
@@ -198,15 +198,16 @@ function animationFrame(timestamp) {
 
   let theta;
   if (transitionAmplitude !== null && currentModel.stable) {
-    theta = currentModel.thetaEq + rockingAngle(elapsed, transitionAmplitude, currentModel.lEff, currentModel.damping);
-    // Auto-stop when the oscillation envelope falls below half a degree (~0.009 rad)
     const omega = 2 * Math.PI / currentModel.period;
     const envelope = Math.abs(transitionAmplitude) * Math.exp(-currentModel.damping * omega * elapsed);
+    // Auto-stop when the oscillation envelope falls below half a degree (~0.009 rad)
     if (envelope < 0.009) {
       renderDiagram(currentModel.thetaEq);
       stopAnimation();
       return;
     }
+    // Glide to new equilibrium without rocking: exponential decay, no cosine
+    theta = currentModel.thetaEq + Math.sign(transitionAmplitude) * envelope;
   } else {
     theta = currentModel.angleAt(elapsed);
   }

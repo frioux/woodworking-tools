@@ -87,8 +87,8 @@ function renderStickFigure(doc, model, theta, geom) {
   const seatThickness = 1;
   const seatSurfaceY = seatHeight - radius + seatThickness;
 
-  // Front edge of the seat in local frame
-  const seatHalfLen = seatDepth * 0.7;
+  // Front/back edge of the seat in local frame (actual seat depth)
+  const seatHalfLen = seatDepth / 2;
 
   // Sitting height and body proportions (all in inches, local frame)
   const sittingHt = sitterHeight * 0.52;
@@ -256,7 +256,7 @@ function renderStickFigure(doc, model, theta, geom) {
  */
 export function renderChairProfile(doc, model, theta) {
   const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
-          cogOffsetX = 0 } = model;
+          cogOffsetX = 0, sitterHeight = 68 } = model;
   const g = svgEl(doc, "g");
 
   const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
@@ -322,7 +322,7 @@ export function renderChairProfile(doc, model, theta) {
 
   // --- Seat ---
   // A horizontal line in the chair's local frame, from front to back
-  const seatHalfLen = seatDepth * 0.7; // seat extends a bit past the legs
+  const seatHalfLen = seatDepth / 2; // seat spans its full depth
 
   const seatEnds = [
     [-seatHalfLen, legTopLocalY],
@@ -338,7 +338,10 @@ export function renderChairProfile(doc, model, theta) {
     COLOR_SEAT, 3));
 
   // --- Backrest (straight line from rear seat edge) ---
-  const backH = seatDepth * 1.05; // backrest slightly longer than seat depth
+  // Scale backrest height to the sitter's torso + head so the figure
+  // doesn't project past the end of the backrest.
+  const sittingHtLocal = sitterHeight * 0.52;
+  const backH = sittingHtLocal * 0.38 + sittingHtLocal * 0.07 * 3; // torsoLen + 3×headR ≈ head top
   // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
   // In the local frame the seat is horizontal, so the angle from the +x axis
   // (pointing forward) to the backrest direction equals the backrestAngle directly.

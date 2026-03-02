@@ -202,10 +202,22 @@ function renderStickFigure(doc, model, theta, geom) {
                           kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
 
   // --- Lower legs (knee to foot, length proportional to sitter height) ---
-  const [footWX, footWY] = localToWorld(footLX, footLY,
-                                         arcCenterX, arcCenterY, theta);
-  g.appendChild(line(doc, kneeWX * s, -kneeWY * s,
-                          footWX * s, -footWY * s, COLOR_PERSON, 2));
+  let [footWX, footWY] = localToWorld(footLX, footLY,
+                                       arcCenterX, arcCenterY, theta);
+  // Clamp foot to the floor — tall sitters (or low seats) can put the foot
+  // below world Y = 0.  Intersect the lower-leg segment with y = 0 so the
+  // foot touches but never crosses the floor line.
+  if (footWY < 0) {
+    if (kneeWY > 0) {
+      const t = kneeWY / (kneeWY - footWY);
+      footWX = kneeWX + t * (footWX - kneeWX);
+    }
+    footWY = 0;
+  }
+  const lowerLegLine = line(doc, kneeWX * s, -kneeWY * s,
+                                footWX * s, -footWY * s, COLOR_PERSON, 2);
+  lowerLegLine.setAttribute("data-testid", "stick-lower-leg");
+  g.appendChild(lowerLegLine);
 
   // --- Upper arm (shoulder forward/down toward lap) ---
   const elbowLX = hipLX + seatDepth * 0.15;

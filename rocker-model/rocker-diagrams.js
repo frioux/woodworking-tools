@@ -106,10 +106,9 @@ function renderStickFigure(doc, model, theta, geom) {
   // backrestAngle is degrees from horizontal seat surface; 90 = vertical.
   const leanRad = ((backrestAngle || 100) - 90) * Math.PI / 180;
 
-  // Hip position: set so that the knee extends just past the seat front edge.
-  // Taller people naturally sit further back toward the backrest.
-  const kneeOverhang = 0.5; // inches knee extends past seat front
-  const hipLX = seatHalfLen + kneeOverhang - thighLen;
+  // Hip position: anchored at the base of the backrest so the person always
+  // leans against it, regardless of seat depth or backrest angle.
+  const hipLX = -seatHalfLen;
   const hipLY = seatSurfaceY;
 
   // Knee: thigh length forward from hip, at seat surface level

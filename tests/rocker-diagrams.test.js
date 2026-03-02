@@ -100,6 +100,21 @@ describe('renderChairProfile', () => {
     const femaleTorso = gFemale.querySelector('[data-testid="stick-torso"]').getAttribute('d');
     expect(maleTorso).not.toBe(femaleTorso);
   });
+
+  it('foot does not clip through the floor for a tall sitter', () => {
+    // 84" sitter on a standard chair: without clamping the foot would go
+    // below world Y = 0 (the floor).  The lower-leg line's y2 must be >= 0
+    // in SVG space, i.e. the world Y of the foot must be >= 0 (on the floor
+    // or above it).
+    const tallModel = buildRockerModel({ ...defaults, sitterHeight: 84 });
+    const g = renderChairProfile(doc, tallModel, 0);
+    const lowerLeg = g.querySelector('[data-testid="stick-lower-leg"]');
+    expect(lowerLeg).toBeTruthy();
+    // SVG y2 = -worldFootY * SCALE; floor is at SVG y = 0.
+    // A foot on or above the floor has worldFootY >= 0, so SVG y2 <= 0.
+    const y2 = parseFloat(lowerLeg.getAttribute('y2'));
+    expect(y2).toBeLessThanOrEqual(0);
+  });
 });
 
 /* ------------------------------------------------------------------ */

@@ -87,19 +87,39 @@ function renderStickFigure(doc, model, theta, geom) {
   const seatThickness = 1;
   const seatSurfaceY = seatHeight - radius + seatThickness;
 
+  // Front edge of the seat in local frame
+  const seatHalfLen = seatDepth * 0.7;
+
   // Sitting height and body proportions (all in inches, local frame)
   const sittingHt = sitterHeight * 0.52;
   const headR     = sittingHt * 0.07;
   const torsoLen  = sittingHt * 0.38;
   const torsoHalfW = sittingHt * 0.08;
 
+  // Leg proportions — typical seated human ratios, gender-differentiated
+  // Thigh (hip to knee, horizontal): ~23% male, ~22% female of standing height
+  // Lower leg (knee to ankle): ~22.5% male, ~21.5% female of standing height
+  const thighLen    = sitterHeight * (sitterGender === "female" ? 0.22 : 0.23);
+  const lowerLegLen = sitterHeight * (sitterGender === "female" ? 0.215 : 0.225);
+
   // Lean angle: how far the torso tilts back from vertical.
   // backrestAngle is degrees from horizontal seat surface; 90 = vertical.
   const leanRad = ((backrestAngle || 100) - 90) * Math.PI / 180;
 
-  // Hip position — slightly back from seat centre
-  const hipLX = -seatDepth * 0.15;
+  // Hip position: set so that the knee extends just past the seat front edge.
+  // Taller people naturally sit further back toward the backrest.
+  const kneeOverhang = 0.5; // inches knee extends past seat front
+  const hipLX = seatHalfLen + kneeOverhang - thighLen;
   const hipLY = seatSurfaceY;
+
+  // Knee: thigh length forward from hip, at seat surface level
+  const kneeLX = hipLX + thighLen;
+  const kneeLY = seatSurfaceY;
+
+  // Foot: lower leg hangs from knee with a slight natural forward lean (~6°)
+  const legForwardAngle = 0.1; // radians
+  const footLX = kneeLX + lowerLegLen * Math.sin(legForwardAngle);
+  const footLY = kneeLY - lowerLegLen * Math.cos(legForwardAngle);
 
   // Shoulder position — torso extends upward, leaning back
   const shoulderLX = hipLX - torsoLen * Math.sin(leanRad);
@@ -174,8 +194,6 @@ function renderStickFigure(doc, model, theta, geom) {
                           neckWX * s, -neckWY * s, COLOR_PERSON, 2));
 
   // --- Upper legs (hips to knees, along the seat) ---
-  const kneeLX = seatDepth * 0.35;
-  const kneeLY = seatSurfaceY;
   const [hipWX, hipWY] = localToWorld(hipLX, hipLY,
                                        arcCenterX, arcCenterY, theta);
   const [kneeWX, kneeWY] = localToWorld(kneeLX, kneeLY,
@@ -183,10 +201,7 @@ function renderStickFigure(doc, model, theta, geom) {
   g.appendChild(line(doc, hipWX * s, -hipWY * s,
                           kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
 
-  // --- Lower legs (knees hanging down toward floor) ---
-  // Floor in local frame is at y = -radius; feet stop a couple inches above
-  const footLX = kneeLX + 1;
-  const footLY = -radius + 2;
+  // --- Lower legs (knee to foot, length proportional to sitter height) ---
   const [footWX, footWY] = localToWorld(footLX, footLY,
                                          arcCenterX, arcCenterY, theta);
   g.appendChild(line(doc, kneeWX * s, -kneeWY * s,

@@ -66,6 +66,18 @@ header a:hover { color: #fff; }
   flex: 1;
   min-width: 0;
 }
+.height-display {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #3b2f2f;
+  background: #faf8f5;
+  text-align: center;
+}
 .step-btn {
   flex-shrink: 0;
   width: 1.6rem;

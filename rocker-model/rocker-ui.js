@@ -5,7 +5,7 @@
  * Manages animation loop, URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel, POSTURE_PRESETS } from "./rocker-math.js";
+import { buildRockerModel, POSTURE_PRESETS, rockingAngle } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
@@ -40,6 +40,8 @@ let animationId = null;
 let animationStart = null;
 let playing = false;
 let urlTimeout = null;
+let currentTheta = 0;
+let transitionAmplitude = null;
 
 /* ------------------------------------------------------------------ */
 /*  Input helpers                                                     */
@@ -168,6 +170,7 @@ function onPopState() {
 /* ------------------------------------------------------------------ */
 
 function renderDiagram(theta) {
+  currentTheta = theta;
   const container = document.getElementById("diagram-container");
   container.innerHTML = "";
   const svg = renderScene(document, currentModel, theta);
@@ -192,7 +195,22 @@ function animationFrame(timestamp) {
     animationStart = timestamp;
   }
   const elapsed = (timestamp - animationStart) / 1000; // seconds
-  const theta = currentModel.angleAt(elapsed);
+
+  let theta;
+  if (transitionAmplitude !== null && currentModel.stable) {
+    theta = currentModel.thetaEq + rockingAngle(elapsed, transitionAmplitude, currentModel.lEff, currentModel.damping);
+    // Auto-stop when the oscillation envelope falls below half a degree (~0.009 rad)
+    const omega = 2 * Math.PI / currentModel.period;
+    const envelope = Math.abs(transitionAmplitude) * Math.exp(-currentModel.damping * omega * elapsed);
+    if (envelope < 0.009) {
+      renderDiagram(currentModel.thetaEq);
+      stopAnimation();
+      return;
+    }
+  } else {
+    theta = currentModel.angleAt(elapsed);
+  }
+
   renderDiagram(theta);
   animationId = requestAnimationFrame(animationFrame);
 }
@@ -201,6 +219,7 @@ function startAnimation() {
   if (!currentModel) {
     return;
   }
+  transitionAmplitude = null; // regular play uses model's initialAmplitude
   playing = true;
   animationStart = null;
   const btn = document.getElementById("play-btn");
@@ -212,6 +231,7 @@ function startAnimation() {
 
 function stopAnimation() {
   playing = false;
+  transitionAmplitude = null;
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -291,8 +311,38 @@ function wireSteppers() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Init                                                              */
+/*  Posture / CoG transition animation                               */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Animate the chair settling from `fromTheta` to the new equilibrium.
+ * The chair rocks with decaying oscillations, starting at `fromTheta`,
+ * and auto-stops once the oscillation amplitude falls below ~0.5°.
+ * Falls back to restartAnimation() when the change is negligible or
+ * the model is unstable.
+ */
+function animatePostureChange(fromTheta) {
+  if (!currentModel || !currentModel.stable) {
+    restartAnimation();
+    return;
+  }
+  const amplitude = fromTheta - currentModel.thetaEq;
+  if (Math.abs(amplitude) < 0.009) {
+    restartAnimation();
+    return;
+  }
+  // Render at the starting position so the animation begins from the correct frame
+  renderDiagram(fromTheta);
+  stopAnimation();
+  transitionAmplitude = amplitude;
+  playing = true;
+  animationStart = null;
+  const btn = document.getElementById("play-btn");
+  if (btn) {
+    btn.textContent = "Pause";
+  }
+  animationId = requestAnimationFrame(animationFrame);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Posture ↔ CoG offset wiring                                      */
@@ -333,6 +383,8 @@ function init() {
     const el = document.getElementById(id);
     const evt = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(evt, () => {
+      const prevTheta = currentTheta;
+
       // Posture dropdown → set offset, then update
       if (id === "posture") {
         applyPosture(el.value);
@@ -342,7 +394,12 @@ function init() {
         syncPostureFromOffset();
       }
       update();
-      restartAnimation();
+
+      if (id === "posture" || id === "cog-offset-x") {
+        animatePostureChange(prevTheta);
+      } else {
+        restartAnimation();
+      }
     });
   }
 

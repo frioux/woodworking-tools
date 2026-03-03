@@ -340,12 +340,20 @@ export function renderChairProfile(doc, model, theta) {
   // --- Backrest (straight line from rear seat edge) ---
   // Scale backrest height to the sitter's torso + head so the figure
   // doesn't project past the end of the backrest.
-  const sittingHtLocal = sitterHeight * 0.52;
-  const backH = sittingHtLocal * 0.38 + sittingHtLocal * 0.07 * 3; // torsoLen + 3×headR ≈ head top
   // backrestAngle is degrees from the seat surface; 90 = vertical, >90 = lean back.
   // In the local frame the seat is horizontal, so the angle from the +x axis
   // (pointing forward) to the backrest direction equals the backrestAngle directly.
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
+  const sittingHtLocal = sitterHeight * 0.52;
+  // The stick figure's hip sits on the seat surface (seatThickness above
+  // the backrest base).  The head is a circle whose vertical top extends
+  // headR above its centre.  Solve for the backH that makes the backrest
+  // line's vertical extent reach at least the head-circle top.
+  const seatThickness = 1;               // matches renderStickFigure
+  const torsoLen = sittingHtLocal * 0.38;
+  const headR    = sittingHtLocal * 0.07;
+  const backH = torsoLen + 2 * headR
+              + (seatThickness + headR) / Math.sin(backAngleRad);
   const localBaseX = -seatHalfLen;
   const localBaseY = legTopLocalY;
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);
@@ -409,8 +417,12 @@ export function renderScene(doc, model, theta) {
   const { radius, seatHeight, cogAboveSeat } = model;
   const s = SCALE;
 
-  // Viewport: generous padding around the chair
-  const totalHeight = seatHeight + cogAboveSeat + 10;
+  // Viewport: generous padding around the chair.
+  // Use the taller of (CoG + margin) or (person top + margin) so the
+  // full stick figure is never clipped, even when a heavy chair pulls
+  // the system CoG well below the sitter's head.
+  const sittingHt = (model.sitterHeight || 68) * 0.52;
+  const totalHeight = seatHeight + Math.max(cogAboveSeat + 10, sittingHt * 0.6 + 3);
   const halfWidth = radius * 0.7 + 10;
   const padTop = 10;
   const padBottom = 5;

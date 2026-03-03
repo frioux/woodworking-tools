@@ -101,6 +101,36 @@ describe('renderChairProfile', () => {
     expect(maleTorso).not.toBe(femaleTorso);
   });
 
+  it('backrest covers the full stick figure (head does not project past)', () => {
+    // With a reclined backrest and tall sitter the head used to extend past
+    // the top of the backrest line.  The backrest endpoint (in SVG coords)
+    // must be at least as far from the floor as the head-circle top.
+    const params = { ...defaults, sitterHeight: 73, backrestAngle: 108,
+                     seatHeight: 18.5, seatDepth: 15 };
+    const m = buildRockerModel(params);
+    const g = renderChairProfile(doc, m, 0);
+
+    // Find the backrest line — it's the line with COLOR_BACK (#7A5C4F)
+    const lines = Array.from(g.querySelectorAll('line'));
+    const backrestLine = lines.find(l => l.getAttribute('stroke') === '#7A5C4F');
+    expect(backrestLine).toBeTruthy();
+
+    // The head circle
+    const head = g.querySelector('[data-testid="stick-head"]');
+    expect(head).toBeTruthy();
+    const headCY = parseFloat(head.getAttribute('cy'));
+    const headR  = parseFloat(head.getAttribute('r'));
+    const headTop = headCY - headR; // SVG y: more negative = higher
+
+    // Backrest top — whichever end is higher (more negative SVG y)
+    const y1 = parseFloat(backrestLine.getAttribute('y1'));
+    const y2 = parseFloat(backrestLine.getAttribute('y2'));
+    const backrestTop = Math.min(y1, y2);
+
+    // The backrest top must be at or above the head top (≤ in SVG coords)
+    expect(backrestTop).toBeLessThanOrEqual(headTop);
+  });
+
   it('foot does not clip through the floor for a tall sitter', () => {
     // 84" sitter on a standard chair: without clamping the foot would go
     // below world Y = 0 (the floor).  The lower-leg line's y2 must be >= 0

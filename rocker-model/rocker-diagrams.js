@@ -106,13 +106,19 @@ function renderStickFigure(doc, model, theta, geom) {
   // backrestAngle is degrees from horizontal seat surface; 90 = vertical.
   const leanRad = ((backrestAngle || 100) - 90) * Math.PI / 180;
 
-  // Hip position: anchored at the base of the backrest so the person always
-  // leans against it, regardless of seat depth or backrest angle.
-  const hipLX = -seatHalfLen;
+  // Hip position: start at the base of the backrest.  If the sitter's
+  // thighs are shorter than the seat depth, scoot forward so the knees
+  // always project past the front seat edge (prevents the lower leg from
+  // visually intersecting the seat plank).
+  let hipLX = -seatHalfLen;
   const hipLY = seatSurfaceY;
 
   // Knee: thigh length forward from hip, at seat surface level
-  const kneeLX = hipLX + thighLen;
+  let kneeLX = hipLX + thighLen;
+  if (kneeLX < seatHalfLen) {
+    hipLX = seatHalfLen - thighLen;
+    kneeLX = seatHalfLen;
+  }
   const kneeLY = seatSurfaceY;
 
   // Foot: lower leg hangs from knee with a slight natural forward lean (~6°)
@@ -352,7 +358,7 @@ export function renderChairProfile(doc, model, theta) {
   const seatThickness = 1;               // matches renderStickFigure
   const torsoLen = sittingHtLocal * 0.38;
   const headR    = sittingHtLocal * 0.07;
-  const backH = torsoLen + 2 * headR
+  const backH = torsoLen + 3 * headR
               + (seatThickness + headR) / Math.sin(backAngleRad);
   const localBaseX = -seatHalfLen;
   const localBaseY = legTopLocalY;

@@ -148,6 +148,145 @@ describe('renderChairProfile', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Body-size overlap / intersection checks                           */
+/* ------------------------------------------------------------------ */
+describe('body-size overlap checks', () => {
+  // Chair geometry matching the reported issue URL:
+  // r=42, sh=18.5, sd=15, ba=108, cw=25
+  const chairParams = {
+    radius: 42,
+    seatHeight: 18.5,
+    seatDepth: 15,
+    backrestAngle: 108,
+    chairWeight: 25,
+    sitterWeight: 150,
+  };
+
+  const SCALE = 4;
+
+  // A range of body sizes from very short to very tall, both genders.
+  const bodySizes = [
+    { sitterHeight: 58, sitterGender: 'female', label: "4'10\" female" },
+    { sitterHeight: 60, sitterGender: 'female', label: "5'0\" female" },
+    { sitterHeight: 62, sitterGender: 'male',   label: "5'2\" male" },
+    { sitterHeight: 62, sitterGender: 'female', label: "5'2\" female" },
+    { sitterHeight: 64, sitterGender: 'female', label: "5'4\" female" },
+    { sitterHeight: 66, sitterGender: 'male',   label: "5'6\" male" },
+    { sitterHeight: 68, sitterGender: 'male',   label: "5'8\" male" },
+    { sitterHeight: 68, sitterGender: 'female', label: "5'8\" female" },
+    { sitterHeight: 70, sitterGender: 'male',   label: "5'10\" male" },
+    { sitterHeight: 73, sitterGender: 'male',   label: "6'1\" male" },
+    { sitterHeight: 76, sitterGender: 'male',   label: "6'4\" male" },
+    { sitterHeight: 78, sitterGender: 'male',   label: "6'6\" male" },
+  ];
+
+  // Also test with the default chair geometry (deeper seat)
+  const defaultChairParams = {
+    radius: 42,
+    seatHeight: 17,
+    seatDepth: 16,
+    backrestAngle: 100,
+    sitterWeight: 170,
+  };
+
+  for (const { sitterHeight, sitterGender, label } of bodySizes) {
+    describe(`${label} (issue chair)`, () => {
+      let g, m;
+      beforeEach(() => {
+        m = buildRockerModel({ ...chairParams, sitterHeight, sitterGender });
+        g = renderChairProfile(doc, m, 0);
+      });
+
+      it('knees are at or past the front seat edge', () => {
+        const lowerLeg = g.querySelector('[data-testid="stick-lower-leg"]');
+        const kneeX = parseFloat(lowerLeg.getAttribute('x1'));
+        const seatFrontX = (chairParams.seatDepth / 2) * SCALE;
+        expect(kneeX).toBeGreaterThanOrEqual(seatFrontX - 0.01);
+      });
+
+      it('backrest covers the head', () => {
+        const head = g.querySelector('[data-testid="stick-head"]');
+        const headCY = parseFloat(head.getAttribute('cy'));
+        const headR  = parseFloat(head.getAttribute('r'));
+        const headTop = headCY - headR;
+
+        const lines = Array.from(g.querySelectorAll('line'));
+        const backrestLine = lines.find(l => l.getAttribute('stroke') === '#7A5C4F');
+        const y1 = parseFloat(backrestLine.getAttribute('y1'));
+        const y2 = parseFloat(backrestLine.getAttribute('y2'));
+        const backrestTop = Math.min(y1, y2);
+
+        expect(backrestTop).toBeLessThanOrEqual(headTop);
+      });
+
+      it('lower leg does not cross the seat line', () => {
+        // At theta=0 the seat line runs from -seatHalfLen to +seatHalfLen
+        // at Y = seatHeight (world).  The lower-leg segment must not cross
+        // this horizontal segment.  Since the foot is always forward of the
+        // knee, it's sufficient to verify the knee is at or past the front
+        // edge (checked above) — but we double-check by computing the
+        // intersection of the lower-leg segment with the seat's Y level.
+        const lowerLeg = g.querySelector('[data-testid="stick-lower-leg"]');
+        const x1 = parseFloat(lowerLeg.getAttribute('x1'));
+        const y1 = parseFloat(lowerLeg.getAttribute('y1'));
+        const x2 = parseFloat(lowerLeg.getAttribute('x2'));
+        const y2 = parseFloat(lowerLeg.getAttribute('y2'));
+
+        // Seat Y in SVG coords = -seatHeight * SCALE
+        const seatSvgY = -chairParams.seatHeight * SCALE;
+        const seatLeftX = -(chairParams.seatDepth / 2) * SCALE;
+        const seatRightX = (chairParams.seatDepth / 2) * SCALE;
+
+        // Check if the lower-leg line segment intersects the seat segment.
+        // The lower leg goes from (x1,y1) at the knee to (x2,y2) at the foot.
+        // If both y values are on the same side of seatSvgY, no crossing.
+        if ((y1 - seatSvgY) * (y2 - seatSvgY) > 0) {
+          return; // no crossing — both above or both below
+        }
+
+        // Compute x at the intersection with seatSvgY
+        const t = (seatSvgY - y1) / (y2 - y1);
+        const xAtSeat = x1 + t * (x2 - x1);
+
+        // The intersection x must be outside the seat segment [seatLeftX, seatRightX]
+        const crossesSeat = xAtSeat >= seatLeftX && xAtSeat <= seatRightX;
+        expect(crossesSeat).toBe(false);
+      });
+    });
+
+    describe(`${label} (default chair)`, () => {
+      let g, m;
+      beforeEach(() => {
+        m = buildRockerModel({ ...defaultChairParams, sitterHeight, sitterGender });
+        g = renderChairProfile(doc, m, 0);
+      });
+
+      it('knees are at or past the front seat edge', () => {
+        const lowerLeg = g.querySelector('[data-testid="stick-lower-leg"]');
+        const kneeX = parseFloat(lowerLeg.getAttribute('x1'));
+        const seatFrontX = (defaultChairParams.seatDepth / 2) * SCALE;
+        expect(kneeX).toBeGreaterThanOrEqual(seatFrontX - 0.01);
+      });
+
+      it('backrest covers the head', () => {
+        const head = g.querySelector('[data-testid="stick-head"]');
+        const headCY = parseFloat(head.getAttribute('cy'));
+        const headR  = parseFloat(head.getAttribute('r'));
+        const headTop = headCY - headR;
+
+        const lines = Array.from(g.querySelectorAll('line'));
+        const backrestLine = lines.find(l => l.getAttribute('stroke') === '#7A5C4F');
+        const y1 = parseFloat(backrestLine.getAttribute('y1'));
+        const y2 = parseFloat(backrestLine.getAttribute('y2'));
+        const backrestTop = Math.min(y1, y2);
+
+        expect(backrestTop).toBeLessThanOrEqual(headTop);
+      });
+    });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  renderScene                                                       */
 /* ------------------------------------------------------------------ */
 describe('renderScene', () => {

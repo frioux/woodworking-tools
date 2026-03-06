@@ -147,35 +147,75 @@ function renderStickFigure(doc, model, theta, geom) {
     };
   };
 
+  const torsoTriangleAtLean = (lean, shoulderX, shoulderY) => {
+    // Perpendicular to torso axis (for triangle width)
+    const tDx = shoulderX - hipLX;
+    const tDy = shoulderY - hipLY;
+    const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
+    const perpX = -tDy / tLen;
+    const perpY = tDx / tLen;
+
+    if (sitterGender === "female") {
+      // △ — wider at hips, narrow at shoulders
+      return [
+        [shoulderX, shoulderY],
+        [hipLX + perpX * torsoHalfW, hipLY + perpY * torsoHalfW],
+        [hipLX - perpX * torsoHalfW, hipLY - perpY * torsoHalfW],
+      ];
+    }
+
+    // ▽ — wider at shoulders, narrow at hips (default / male)
+    return [
+      [shoulderX + perpX * torsoHalfW, shoulderY + perpY * torsoHalfW],
+      [shoulderX - perpX * torsoHalfW, shoulderY - perpY * torsoHalfW],
+      [hipLX, hipLY],
+    ];
+  };
+
   // Positive means in front of / on backrest. Negative means behind it.
   const signedBackrestDistance = (x, y) =>
     (x - backBaseX) * backNormX + (y - backBaseY) * backNormY;
 
-  const clearsBackrest = (lean) => {
+  const backrestClearanceAtLean = (lean) => {
     const p = postureAtLean(lean);
-    const shoulderDist = signedBackrestDistance(p.shoulderX, p.shoulderY);
-    const headDist = signedBackrestDistance(p.headX, p.headY);
-    const headBackDist = signedBackrestDistance(p.headBackX, p.headBackY);
-    return shoulderDist >= -1e-6 && headDist >= -1e-6 && headBackDist >= -1e-6;
+    const torsoTri = torsoTriangleAtLean(lean, p.shoulderX, p.shoulderY);
+    const dists = [
+      signedBackrestDistance(p.shoulderX, p.shoulderY),
+      signedBackrestDistance(p.headX, p.headY),
+      signedBackrestDistance(p.headBackX, p.headBackY),
+      ...torsoTri.map(([x, y]) => signedBackrestDistance(x, y)),
+    ];
+
+    return {
+      clear: dists.every((d) => d >= -1e-6),
+      minDist: Math.min(...dists),
+    };
   };
 
-  // Start from upright and find the maximum lean that still stays in front
-  // of the backrest, up to 45°.
+  // Resolve a natural lean that keeps the body from crossing the backrest.
+  // Prefer a lean where the back/head are as close as possible to touching
+  // the backrest; if the backrest is unreachable, this naturally settles at
+  // either the best unsupported lean (up to 45°) or upright.
   let leanRad = 0;
-  if (clearsBackrest(maxLeanRad)) {
-    leanRad = maxLeanRad;
-  } else {
-    let lo = 0;
-    let hi = maxLeanRad;
-    for (let i = 0; i < 24; i++) {
-      const mid = (lo + hi) * 0.5;
-      if (clearsBackrest(mid)) {
-        lo = mid;
-      } else {
-        hi = mid;
+  let bestDist = Number.POSITIVE_INFINITY;
+  const leanSteps = 180;
+  for (let i = 0; i <= leanSteps; i++) {
+    const lean = (maxLeanRad * i) / leanSteps;
+    const { clear, minDist } = backrestClearanceAtLean(lean);
+    if (!clear) {
+      continue;
+    }
+
+    // Favor the smallest clearance (closest touch). For ties, prefer the
+    // larger lean so an unsupported sitter uses available recline.
+    const distGap = Math.abs(minDist - bestDist);
+    if (minDist < bestDist - 1e-6 || (distGap <= 1e-6 && lean > leanRad)) {
+      bestDist = minDist;
+      leanRad = lean;
+      if (bestDist <= 1e-4) {
+        break;
       }
     }
-    leanRad = lo;
   }
 
   // Final shoulder/head from resolved lean.
@@ -186,29 +226,7 @@ function renderStickFigure(doc, model, theta, geom) {
   const headLY = posture.headY;
 
   // --- Torso triangle ---
-  // Perpendicular to torso axis (for triangle width)
-  const tDx = shoulderLX - hipLX;
-  const tDy = shoulderLY - hipLY;
-  const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
-  const perpX = -tDy / tLen;
-  const perpY = tDx / tLen;
-
-  let triLocal;
-  if (sitterGender === "female") {
-    // △ — wider at hips, narrow at shoulders
-    triLocal = [
-      [shoulderLX, shoulderLY],
-      [hipLX + perpX * torsoHalfW, hipLY + perpY * torsoHalfW],
-      [hipLX - perpX * torsoHalfW, hipLY - perpY * torsoHalfW],
-    ];
-  } else {
-    // ▽ — wider at shoulders, narrow at hips (default / male)
-    triLocal = [
-      [shoulderLX + perpX * torsoHalfW, shoulderLY + perpY * torsoHalfW],
-      [shoulderLX - perpX * torsoHalfW, shoulderLY - perpY * torsoHalfW],
-      [hipLX, hipLY],
-    ];
-  }
+  const triLocal = torsoTriangleAtLean(leanRad, shoulderLX, shoulderLY);
 
   let triPath = "";
   for (let i = 0; i < triLocal.length; i++) {

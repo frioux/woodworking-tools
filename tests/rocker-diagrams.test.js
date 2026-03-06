@@ -131,6 +131,26 @@ describe('renderChairProfile', () => {
     expect(backrestTop).toBeLessThanOrEqual(headTop);
   });
 
+
+  it('does not place hips behind the backrest base for tall sitters', () => {
+    const m = buildRockerModel({
+      radius: 42,
+      seatHeight: 17,
+      seatDepth: 16,
+      backrestAngle: 97,
+      chairWeight: 25,
+      sitterWeight: 75,
+      sitterHeight: 73,
+      sitterGender: 'male',
+      cogOffsetX: 0,
+    });
+    const g = renderChairProfile(doc, m, 0);
+    const upperLeg = g.querySelector('[data-testid="stick-upper-leg"]');
+    expect(upperLeg).toBeTruthy();
+    const hipX = parseFloat(upperLeg.getAttribute('x1'));
+    const backBaseX = -(16 / 2) * 4;
+    expect(hipX).toBeGreaterThanOrEqual(backBaseX - 0.01);
+  });
   it('foot does not clip through the floor for a tall sitter', () => {
     // 84" sitter on a standard chair: without clamping the foot would go
     // below world Y = 0 (the floor).  The lower-leg line's y2 must be >= 0

@@ -248,6 +248,26 @@ export function estimateChairCogHeight(seatHeight) {
 }
 
 /**
+ * Estimate the chair's own fore/aft centre-of-gravity offset.
+ *
+ * Wooden rockers carry extra mass behind seat centre (back posts,
+ * backrest slats/crest rail, and longer rear runner material).  The
+ * default is therefore slightly rear-biased, with more rear bias for
+ * deeper seats and more reclined backs.
+ *
+ * Negative values mean the chair CoG sits behind the seat midpoint.
+ *
+ * @param {number} seatDepth     – seat depth to backrest (in)
+ * @param {number} backrestAngle – backrest angle from seat (deg)
+ * @returns {number} chair CoG fore/aft offset (in)
+ */
+export function estimateChairCogOffsetX(seatDepth, backrestAngle = 100) {
+  const depthTerm = -0.12 * seatDepth;
+  const reclineTerm = -0.04 * (backrestAngle - 90);
+  return Math.max(-5, Math.min(0.5, depthTerm + reclineTerm));
+}
+
+/**
  * Compute the combined system CoG height (chair + sitter).
  *
  * @param {number} sitterWeight   – sitter weight (lb)
@@ -262,6 +282,23 @@ export function systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH
   }
   const totalWeight = sitterWeight + chairWeight;
   return (sitterWeight * sitterCogH + chairWeight * chairCogH) / totalWeight;
+}
+
+/**
+ * Compute the combined system CoG fore/aft offset (chair + sitter).
+ *
+ * @param {number} sitterWeight   – sitter weight (lb)
+ * @param {number} sitterOffsetX  – sitter CoG fore/aft offset (in)
+ * @param {number} chairWeight    – chair weight (lb)
+ * @param {number} chairOffsetX   – chair CoG fore/aft offset (in)
+ * @returns {number} combined CoG fore/aft offset (in)
+ */
+export function systemCogOffsetX(sitterWeight, sitterOffsetX, chairWeight, chairOffsetX) {
+  if (chairWeight <= 0) {
+    return sitterOffsetX;
+  }
+  const totalWeight = sitterWeight + chairWeight;
+  return (sitterWeight * sitterOffsetX + chairWeight * chairOffsetX) / totalWeight;
 }
 
 /* ------------------------------------------------------------------ */
@@ -300,9 +337,11 @@ export function buildRockerModel(params) {
 
   // Chair CoG (estimated from geometry)
   const chairCogH = estimateChairCogHeight(seatHeight);
+  const chairCogOffsetX = estimateChairCogOffsetX(seatDepth, backrestAngle);
 
   // Combined system CoG — used for the rolling-body physics
   const cogHeight = systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH);
+  const cogOffsetSystemX = systemCogOffsetX(sitterWeight, cogOffsetX, chairWeight, chairCogOffsetX);
   const cogAboveSeat = cogHeight - seatHeight;
 
   const lEff = effectivePendulumLength(radius, cogHeight);
@@ -318,7 +357,7 @@ export function buildRockerModel(params) {
     ? Math.min(Math.PI / 6, baseAmplitude * Math.sqrt(referenceGap / (radius - cogHeight)))
     : 0;
   const thetaEq = stable
-    ? equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX)
+    ? equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetSystemX)
     : 0;
 
   return {
@@ -331,7 +370,9 @@ export function buildRockerModel(params) {
     cogAboveSeat,
     cogHeight,
     chairWeight,
-    cogOffsetX,
+    cogOffsetX: cogOffsetSystemX,
+    sitterCogOffsetX: cogOffsetX,
+    chairCogOffsetX,
     lEff,
     period,
     damping,
@@ -349,7 +390,7 @@ export function buildRockerModel(params) {
       const theta = this.angleAt(t);
       return {
         theta,
-        ...rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX),
+        ...rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetSystemX),
       };
     },
   };

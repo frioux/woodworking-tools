@@ -10,6 +10,8 @@ import {
   estimateDamping,
   estimateChairCogHeight,
   systemCogHeight,
+  estimateChairCogOffsetX,
+  systemCogOffsetX,
   buildRockerModel,
   POSTURE_PRESETS,
 } from '../rocker-model/rocker-math.js';
@@ -293,6 +295,45 @@ describe('systemCogHeight', () => {
   });
 });
 
+
+/* ------------------------------------------------------------------ */
+/*  estimateChairCogOffsetX                                           */
+/* ------------------------------------------------------------------ */
+describe('estimateChairCogOffsetX', () => {
+  it('returns a rear-biased default for typical rocker geometry', () => {
+    expect(estimateChairCogOffsetX(16, 100)).toBeLessThan(0);
+  });
+
+  it('becomes more rear-biased with deeper seats', () => {
+    expect(estimateChairCogOffsetX(20, 100)).toBeLessThan(estimateChairCogOffsetX(14, 100));
+  });
+
+  it('becomes more rear-biased with more reclined backrest', () => {
+    expect(estimateChairCogOffsetX(16, 110)).toBeLessThan(estimateChairCogOffsetX(16, 95));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  systemCogOffsetX                                                  */
+/* ------------------------------------------------------------------ */
+describe('systemCogOffsetX', () => {
+  it('returns sitter offset when chair weight is zero', () => {
+    expect(systemCogOffsetX(170, 2.5, 0, -2)).toBeCloseTo(2.5);
+  });
+
+  it('returns weighted average of sitter and chair offsets', () => {
+    // sitter 170 lb at +2", chair 30 lb at -2"
+    // combined = (170*2 + 30*(-2)) / 200 = 1.4
+    expect(systemCogOffsetX(170, 2, 30, -2)).toBeCloseTo(1.4);
+  });
+
+  it('chair rear bias pulls system offset backward', () => {
+    const sitterOnly = systemCogOffsetX(170, 2, 0, -2);
+    const withChair = systemCogOffsetX(170, 2, 25, -2);
+    expect(withChair).toBeLessThan(sitterOnly);
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /*  buildRockerModel                                                  */
 /* ------------------------------------------------------------------ */
@@ -393,14 +434,16 @@ describe('buildRockerModel', () => {
     expect(m.backrestAngle).toBe(100);
   });
 
-  it('defaults cogOffsetX to 0 when omitted', () => {
+  it('defaults sitterCogOffsetX to 0 when omitted', () => {
     const m = buildRockerModel(defaults);
-    expect(m.cogOffsetX).toBe(0);
+    expect(m.sitterCogOffsetX).toBe(0);
   });
 
-  it('passes through cogOffsetX', () => {
-    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
-    expect(m.cogOffsetX).toBe(3);
+  it('tracks both sitter and system CoG offsets', () => {
+    const m = buildRockerModel({ ...defaults, cogOffsetX: 3, chairWeight: 25 });
+    expect(m.sitterCogOffsetX).toBe(3);
+    expect(m.cogOffsetX).toBeLessThan(3);
+    expect(m.chairCogOffsetX).toBeLessThan(0);
   });
 
   it('has thetaEq of 0 with cogOffsetX=0', () => {

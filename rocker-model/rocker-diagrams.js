@@ -103,13 +103,19 @@ function renderStickFigure(doc, model, theta, geom) {
   const lowerLegLen = sitterHeight * (sitterGender === "female" ? 0.215 : 0.225);
 
   // Lean angle: how far the torso tilts back from vertical.
-  // backrestAngle is degrees from horizontal seat surface; 90 = vertical.
-  const leanRad = ((backrestAngle || 100) - 90) * Math.PI / 180;
+  // We cap unsupported leaning at 45° and prevent the body from crossing
+  // behind the backrest line. If the backrest is too far away (short sitter,
+  // deep seat), the sitter can still lean back unsupported up to this cap.
+  const maxLeanRad = Math.PI / 4;
 
-  // Hip position: start at the base of the backrest.  If the sitter's
+  const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
+  const backBaseX = -seatHalfLen;
+  const backBaseY = seatHeight - radius;
+
+  // Hip position: start at the base of the backrest. If the sitter's
   // thighs are shorter than the seat depth, scoot forward so the knees
-  // always project past the front seat edge (prevents the lower leg from
-  // visually intersecting the seat plank).
+  // project past the front seat edge, but never allow hips behind the
+  // backrest base.
   let hipLX = -seatHalfLen;
   const hipLY = seatSurfaceY;
 
@@ -119,6 +125,10 @@ function renderStickFigure(doc, model, theta, geom) {
     hipLX = seatHalfLen - thighLen;
     kneeLX = seatHalfLen;
   }
+  if (hipLX < backBaseX) {
+    hipLX = backBaseX;
+    kneeLX = hipLX + thighLen;
+  }
   const kneeLY = seatSurfaceY;
 
   // Foot: lower leg hangs from knee with a slight natural forward lean (~6°)
@@ -126,13 +136,61 @@ function renderStickFigure(doc, model, theta, geom) {
   const footLX = kneeLX + lowerLegLen * Math.sin(legForwardAngle);
   const footLY = kneeLY - lowerLegLen * Math.cos(legForwardAngle);
 
-  // Shoulder position — torso extends upward, leaning back
-  const shoulderLX = hipLX - torsoLen * Math.sin(leanRad);
-  const shoulderLY = hipLY + torsoLen * Math.cos(leanRad);
+  const postureAtLean = (lean) => {
+    const shoulderX = hipLX - torsoLen * Math.sin(lean);
+    const shoulderY = hipLY + torsoLen * Math.cos(lean);
+    const headX = shoulderX - (headR * 2) * Math.sin(lean);
+    const headY = shoulderY + (headR * 2) * Math.cos(lean);
+    // Back-of-head point (furthest aft point of the circle)
+    const headBackX = headX - headR * Math.cos(lean);
+    const headBackY = headY - headR * Math.sin(lean);
+    return {
+      shoulderX, shoulderY, headX, headY, headBackX, headBackY,
+    };
+  };
 
-  // Head centre — above shoulders along the same lean axis
-  const headLX = shoulderLX - (headR * 2) * Math.sin(leanRad);
-  const headLY = shoulderLY + (headR * 2) * Math.cos(leanRad);
+  // Positive means in front of / on backrest. Negative means behind it.
+  // In local coordinates, "behind" means farther aft (more negative X)
+  // than the backrest line at the same Y.
+  const signedBackrestDistance = (x, y) => {
+    const yRel = y - backBaseY;
+    const xOnBackrest = backBaseX + yRel * (Math.cos(backAngleRad) / Math.sin(backAngleRad));
+    return x - xOnBackrest;
+  };
+
+  const clearsBackrest = (lean) => {
+    const p = postureAtLean(lean);
+    const shoulderDist = signedBackrestDistance(p.shoulderX, p.shoulderY);
+    const headDist = signedBackrestDistance(p.headX, p.headY);
+    const headBackDist = signedBackrestDistance(p.headBackX, p.headBackY);
+    return shoulderDist >= -1e-6 && headDist >= -1e-6 && headBackDist >= -1e-6;
+  };
+
+  // Start from upright and find the maximum lean that still stays in front
+  // of the backrest, up to 45°.
+  let leanRad = 0;
+  if (clearsBackrest(maxLeanRad)) {
+    leanRad = maxLeanRad;
+  } else {
+    let lo = 0;
+    let hi = maxLeanRad;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) * 0.5;
+      if (clearsBackrest(mid)) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    leanRad = lo;
+  }
+
+  // Final shoulder/head from resolved lean.
+  const posture = postureAtLean(leanRad);
+  const shoulderLX = posture.shoulderX;
+  const shoulderLY = posture.shoulderY;
+  const headLX = posture.headX;
+  const headLY = posture.headY;
 
   // --- Torso triangle ---
   // Perpendicular to torso axis (for triangle width)
@@ -203,8 +261,10 @@ function renderStickFigure(doc, model, theta, geom) {
                                        arcCenterX, arcCenterY, theta);
   const [kneeWX, kneeWY] = localToWorld(kneeLX, kneeLY,
                                          arcCenterX, arcCenterY, theta);
-  g.appendChild(line(doc, hipWX * s, -hipWY * s,
-                          kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
+  const upperLegLine = line(doc, hipWX * s, -hipWY * s,
+                              kneeWX * s, -kneeWY * s, COLOR_PERSON, 2);
+  upperLegLine.setAttribute("data-testid", "stick-upper-leg");
+  g.appendChild(upperLegLine);
 
   // --- Lower legs (knee to foot, length proportional to sitter height) ---
   let [footWX, footWY] = localToWorld(footLX, footLY,

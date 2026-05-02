@@ -3,7 +3,7 @@
  *
  * Base recipe (Nick Kroll, via Christopher Schwarz):
  *   8 oz (250 g) fat-free quark
- *   6 tbsp (90 ml) tap water
+ *   3 fl oz (90 ml) tap water — recipe gives 6 tbsp; 1 fl oz = 2 tbsp
  *   1 oz (30 g) hydrated lime
  *   1 oz (30 g) artist pigment
  *
@@ -14,7 +14,7 @@
 export const PAINT_RECIPE = {
   quarkOz: 8,
   quarkG: 250,
-  waterTbsp: 6,
+  waterOz: 3,
   waterMl: 90,
   limeOz: 1,
   limeG: 30,
@@ -48,7 +48,7 @@ export function scalePaint({ scaleBy, value }) {
     factor,
     quarkOz: PAINT_RECIPE.quarkOz * factor,
     quarkG: PAINT_RECIPE.quarkG * factor,
-    waterTbsp: PAINT_RECIPE.waterTbsp * factor,
+    waterOz: PAINT_RECIPE.waterOz * factor,
     waterMl: PAINT_RECIPE.waterMl * factor,
     limeOz: PAINT_RECIPE.limeOz * factor,
     limeG: PAINT_RECIPE.limeG * factor,

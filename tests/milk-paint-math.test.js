@@ -13,7 +13,7 @@ describe('scalePaint', () => {
     expect(r.factor).toBe(1);
     expect(r.quarkOz).toBe(8);
     expect(r.quarkG).toBe(250);
-    expect(r.waterTbsp).toBe(6);
+    expect(r.waterOz).toBe(3);
     expect(r.waterMl).toBe(90);
     expect(r.limeOz).toBe(1);
     expect(r.limeG).toBe(30);
@@ -32,7 +32,7 @@ describe('scalePaint', () => {
     const r = scalePaint({ scaleBy: 'quark', value: 4 });
     expect(r.factor).toBe(0.5);
     expect(r.quarkOz).toBe(4);
-    expect(r.waterTbsp).toBe(3);
+    expect(r.waterOz).toBe(1.5);
     expect(r.limeOz).toBe(0.5);
     expect(r.pigmentOz).toBe(0.5);
   });
@@ -41,7 +41,7 @@ describe('scalePaint', () => {
     const r = scalePaint({ scaleBy: 'pigment', value: 2 });
     expect(r.factor).toBe(2);
     expect(r.quarkOz).toBe(16);
-    expect(r.waterTbsp).toBe(12);
+    expect(r.waterOz).toBe(6);
     expect(r.limeOz).toBe(2);
     expect(r.pigmentOz).toBe(2);
     expect(r.pigmentG).toBe(60);
@@ -53,6 +53,12 @@ describe('scalePaint', () => {
     expect(r.waterMl).toBe(45);
     expect(r.limeG).toBe(15);
     expect(r.pigmentG).toBe(15);
+  });
+
+  it('matches the recipe author\'s 6 tbsp at the base ratio', () => {
+    // 1 fl oz = 2 tbsp, so 3 fl oz = 6 tbsp
+    const r = scalePaint({ scaleBy: 'quark', value: 8 });
+    expect(r.waterOz * 2).toBe(6);
   });
 
   it('throws on unknown scaleBy', () => {
@@ -96,7 +102,7 @@ describe('PAINT_RECIPE constants', () => {
   it('matches Nick Kroll base recipe', () => {
     expect(PAINT_RECIPE.quarkOz).toBe(8);
     expect(PAINT_RECIPE.quarkG).toBe(250);
-    expect(PAINT_RECIPE.waterTbsp).toBe(6);
+    expect(PAINT_RECIPE.waterOz).toBe(3);
     expect(PAINT_RECIPE.waterMl).toBe(90);
     expect(PAINT_RECIPE.limeOz).toBe(1);
     expect(PAINT_RECIPE.limeG).toBe(30);

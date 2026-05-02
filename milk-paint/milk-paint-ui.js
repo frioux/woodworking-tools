@@ -69,7 +69,7 @@ function renderPaintRecipe() {
 
   const rows = [
     ['Quark (fat-free)', r.quarkOz, 'oz', r.quarkG, 'g'],
-    ['Water', r.waterTbsp, 'tbsp', r.waterMl, 'ml'],
+    ['Water', r.waterOz, 'fl oz', r.waterMl, 'ml'],
     ['Hydrated lime', r.limeOz, 'oz', r.limeG, 'g'],
     ['Pigment', r.pigmentOz, 'oz', r.pigmentG, 'g']
   ];

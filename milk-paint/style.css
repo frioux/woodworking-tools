@@ -1,0 +1,243 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #f5f0eb;
+  color: #3b2f2f;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  background: #5c3d2e;
+  color: #f5f0eb;
+  padding: 1rem 1.5rem;
+}
+header h1 { font-size: 1.5rem; }
+header a {
+  color: #d4c4b0;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+header a:hover { color: #fff; }
+
+.layout {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.intro {
+  font-size: 1rem;
+  color: #5c3d2e;
+}
+.intro a {
+  color: #8B6914;
+  font-weight: bold;
+}
+.intro a:hover {
+  color: #5c3d2e;
+}
+.intro-small {
+  font-size: 0.95rem;
+  color: #7a5c4f;
+  margin-bottom: 1rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d4c4b0;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+.card > h2,
+.card details > summary > h2 {
+  font-size: 1.25rem;
+  color: #5c3d2e;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e8ddd2;
+  padding-bottom: 0.5rem;
+  display: inline-block;
+}
+
+/* Collapsible quark section */
+#quark-section > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+#quark-section > summary::-webkit-details-marker { display: none; }
+#quark-section > summary::before {
+  content: '▸';
+  color: #8B6914;
+  font-size: 0.9rem;
+  transition: transform 0.15s;
+}
+#quark-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+#quark-section > summary > h2 {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* Form */
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  color: #7a5c4f;
+  margin-bottom: 0.35rem;
+}
+.radio-row {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.radio-option {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: #3b2f2f;
+  font-size: 0.95rem;
+  margin-bottom: 0 !important;
+}
+.radio-option input { cursor: pointer; }
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 280px;
+}
+.input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #3b2f2f;
+  background: #faf8f5;
+}
+.input-row input:focus {
+  outline: none;
+  border-color: #a0845e;
+  box-shadow: 0 0 0 2px rgba(160, 132, 94, 0.2);
+}
+.stepper {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #d4c4b0;
+  border-radius: 4px;
+  background: #faf8f5;
+  color: #7a5c4f;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.stepper:active { background: #e8ddd2; }
+
+.form-group.has-error label { color: #c00; }
+.validation-error {
+  font-size: 0.8rem;
+  color: #c00;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+
+/* Results */
+.results-heading {
+  font-size: 1rem;
+  color: #5c3d2e;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.recipe-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.recipe-table th,
+.recipe-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e8ddd2;
+}
+.recipe-table th {
+  color: #7a5c4f;
+  font-weight: normal;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recipe-table td:first-child {
+  color: #5c3d2e;
+  font-weight: bold;
+}
+.batch-note {
+  font-size: 0.85rem;
+  color: #7a5c4f;
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+.alt-unit {
+  color: #7a5c4f;
+  font-size: 0.85em;
+}
+.quark-unit {
+  color: #7a5c4f;
+  font-weight: normal;
+}
+
+/* Instructions */
+.instructions {
+  margin-top: 1.25rem;
+  border-top: 1px solid #e8ddd2;
+  padding-top: 0.75rem;
+}
+.instructions > summary {
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #5c3d2e;
+  font-weight: bold;
+}
+.instructions ol {
+  margin: 0.75rem 0 0.5rem 1.5rem;
+  font-size: 0.95rem;
+  color: #3b2f2f;
+}
+.instructions li { margin-bottom: 0.35rem; }
+.instructions .tip {
+  font-size: 0.85rem;
+  color: #7a5c4f;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .stepper {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.25rem;
+  }
+}

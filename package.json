@@ -6,8 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint frame-designer/ rocker-model/ tests/ && html-validate index.html frame-designer/index.html rocker-model/index.html",
-    "lint:fix": "eslint --fix frame-designer/ rocker-model/ tests/"
+    "lint": "eslint frame-designer/ rocker-model/ milk-paint/ tests/ && html-validate index.html frame-designer/index.html rocker-model/index.html milk-paint/index.html",
+    "lint:fix": "eslint --fix frame-designer/ rocker-model/ milk-paint/ tests/"
   },
   "devDependencies": {
     "eslint": "^9.0.0",

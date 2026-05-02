@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fresh Milk Paint Calculator — Woodworking Tools</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="../index.html">&larr; All Tools</a>
+    <h1>Fresh Milk Paint Calculator</h1>
+  </header>
+
+  <main class="layout">
+    <p class="intro">
+      Scale Nick Kroll's fresh milk paint recipe to the batch size you need —
+      either by how much quark you have, or by how much pigment you want to use.
+      See
+      <a href="https://christopherschwarz.substack.com/p/make-fresh-milk-paint-with-nick-kroll" target="_blank" rel="noopener">
+        Fresh Milk Paint with Nick Kroll
+      </a>
+      for the full recipe and technique.
+    </p>
+
+    <section class="card">
+      <h2>Paint Recipe</h2>
+
+      <div class="form-group">
+        <label>Scale by</label>
+        <div class="radio-row">
+          <label class="radio-option">
+            <input type="radio" name="paint-scale-by" value="quark" checked>
+            <span>Quark amount</span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="paint-scale-by" value="pigment">
+            <span>Pigment amount</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="paint-input-group">
+        <label for="paint-amount">
+          <span id="paint-amount-label">Quark</span> (oz)
+          <span class="validation-error" id="error-paint-amount"></span>
+        </label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="paint-amount" data-dir="down" aria-label="Decrease">&minus;</button>
+          <input type="number" id="paint-amount" value="8" min="0.1" step="0.5">
+          <button type="button" class="stepper" data-for="paint-amount" data-dir="up" aria-label="Increase">+</button>
+        </div>
+      </div>
+
+      <h3 class="results-heading">Ingredients</h3>
+      <table class="recipe-table" id="paint-recipe">
+        <thead>
+          <tr><th>Ingredient</th><th>Customary</th><th>Metric</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <p class="batch-note" id="batch-note"></p>
+
+      <details class="instructions">
+        <summary>Mixing instructions</summary>
+        <ol>
+          <li>Place the water in a mason jar.</li>
+          <li>Wearing safety goggles, add the hydrated lime. Cover the jar and shake a few times.</li>
+          <li>Remove the lid and add the quark.</li>
+          <li>Blend with an immersion blender or whisk until smooth and creamy (~20 seconds).</li>
+          <li>Add the pigment and blend again (~20 seconds).</li>
+          <li>Brush on immediately with a synthetic brush. Sand after the first coat, then apply three more.</li>
+        </ol>
+        <p class="tip">Use the paint immediately and discard leftovers after a few days.</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <details id="quark-section">
+        <summary><h2>Quark Recipe (optional)</h2></summary>
+
+        <p class="intro-small">
+          Can't find quark at the store? Make your own from skim milk and vinegar.
+          A quart of skim milk yields about 4&nbsp;oz of quark.
+        </p>
+
+        <div class="form-group">
+          <label>Scale by</label>
+          <div class="radio-row">
+            <label class="radio-option">
+              <input type="radio" name="quark-scale-by" value="quark" checked>
+              <span>Target quark</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="quark-scale-by" value="milk">
+              <span>Skim milk on hand</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="quark-amount">
+            <span id="quark-amount-label">Quark</span>
+            <span class="quark-unit" id="quark-amount-unit">(oz)</span>
+            <span class="validation-error" id="error-quark-amount"></span>
+          </label>
+          <div class="input-row">
+            <button type="button" class="stepper" data-for="quark-amount" data-dir="down" aria-label="Decrease">&minus;</button>
+            <input type="number" id="quark-amount" value="8" min="0.1" step="0.5">
+            <button type="button" class="stepper" data-for="quark-amount" data-dir="up" aria-label="Increase">+</button>
+          </div>
+        </div>
+
+        <h3 class="results-heading">You'll need</h3>
+        <table class="recipe-table" id="quark-recipe">
+          <thead>
+            <tr><th>Ingredient</th><th>Amount</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <details class="instructions">
+          <summary>Quark instructions</summary>
+          <ol>
+            <li>Heat the skim milk gently until just below a simmer.</li>
+            <li>Stir in the vinegar; the milk will curdle within a minute or two.</li>
+            <li>Strain through cheesecloth and let drip until it reaches a thick, ricotta-like consistency.</li>
+            <li>Total elapsed time: about 15 minutes.</li>
+          </ol>
+          <p class="tip">The process is flexible and forgiving — small yield variations are normal.</p>
+        </details>
+      </details>
+    </section>
+  </main>
+
+  <script type="module" src="milk-paint-ui.js"></script>
+</body>
+</html>

@@ -234,6 +234,23 @@ header a:hover { color: #fff; }
   margin-top: 0.5rem;
 }
 
+/* --- Site footer --- */
+.site-footer {
+  max-width: 800px;
+  margin: 2rem auto 0;
+  padding: 1rem 1.5rem 2rem;
+  font-size: 0.85rem;
+  color: #9c8576;
+  text-align: center;
+}
+.site-footer a {
+  color: #7a5c4f;
+  text-decoration: none;
+  border-bottom: 1px dotted #c4b5a0;
+}
+.site-footer a:hover { color: #5c3d2e; border-bottom-color: #7a5c4f; }
+.site-footer .sep { margin: 0 0.5rem; color: #c4b5a0; }
+
 @media (max-width: 600px) {
   .stepper {
     width: 2.75rem;

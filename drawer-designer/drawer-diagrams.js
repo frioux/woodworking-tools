@@ -336,13 +336,15 @@ export function renderTopView(doc, d, fmt) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Isometric (exploded)                                             */
+/*  Isometric (assembled)                                            */
 /* ------------------------------------------------------------------ */
 
 /**
- * Exploded isometric view — the five parts pulled apart and drawn fully
- * opaque, with simple per-face shading (top lightest, sides darker) instead
- * of transparency. Color-coded by part.
+ * Assembled isometric view — the drawer as an open-top tray, drawn fully
+ * opaque. Each part is a solid slab with simple per-face shading (top
+ * lightest, sides darker) instead of transparency. Parts are painted
+ * back-to-front so nearer parts cleanly occlude farther ones.
+ * Color-coded by part.
  */
 export function renderIsometric(doc, d, _fmt) {
   const angle = Math.PI / 6; // 30°
@@ -366,26 +368,21 @@ export function renderIsometric(doc, d, _fmt) {
     return [(x - b) * cos * s, (x + b) * sin * s - z * s];
   }
 
-  // Explosion offsets pull each part away from the assembled position.
-  const ex = Math.max(W * 0.4, 4);
-  const ey = Math.max(D * 0.4, 4);
-  const ez = Math.max(H * 1.6, 6);
-
-  // Each part: assembled box [x0, y0, z0, w, d, h], explode offset, color.
-  // Drawn far-to-near so nearer parts cleanly overdraw farther ones.
+  // Each part as an assembled box [x0, y0, z0, w, d, h] with its color.
+  // Listed far-to-near so nearer parts overdraw farther ones: the back
+  // wall first, the two sides, the bottom panel, and the front wall last.
   const pieces = [
-    { b: [0, D - bt, 0, W, bt, H], o: [0, ey, 0], c: COLORS.secondary },                 // back
-    { b: [0, 0, 0, st, D, H], o: [-ex, 0, 0], c: COLORS.secondary },                     // left side
-    { b: [W - st, 0, 0, st, D, H], o: [ex, 0, 0], c: COLORS.secondary },                 // right side
-    { b: [0, 0, 0, W, ft, H], o: [0, -ey, 0], c: COLORS.front },                         // front
-    { b: [st, ft, bz, W - 2 * st, D - ft - bt, btm], o: [0, 0, -ez], c: COLORS.bottom }  // bottom
+    { b: [0, D - bt, 0, W, bt, H], c: COLORS.secondary },                  // back
+    { b: [0, 0, 0, st, D, H], c: COLORS.secondary },                       // left side
+    { b: [W - st, 0, 0, st, D, H], c: COLORS.secondary },                  // right side
+    { b: [st, ft, bz, W - 2 * st, D - ft - bt, btm], c: COLORS.bottom },   // bottom
+    { b: [0, 0, 0, W, ft, H], c: COLORS.front }                           // front
   ];
 
   // Resolve absolute corners and track the projected bounds for the viewBox.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const resolved = pieces.map(({ b, o, c }) => {
-    const [x0, y0, z0, w, dp, h] = b;
-    const X0 = x0 + o[0], Y0 = y0 + o[1], Z0 = z0 + o[2];
+  const resolved = pieces.map(({ b, c }) => {
+    const [X0, Y0, Z0, w, dp, h] = b;
     const X1 = X0 + w, Y1 = Y0 + dp, Z1 = Z0 + h;
     for (const X of [X0, X1]) {
       for (const Y of [Y0, Y1]) {

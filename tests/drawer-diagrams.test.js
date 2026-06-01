@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import { calculateDrawer, formatInches } from '../drawer-designer/drawer-math.js';
 import {
-  renderFrontView, renderSideView, renderTopView, renderIsometric
+  renderFrontView, renderSideView, renderTopView
 } from '../drawer-designer/drawer-diagrams.js';
 
 const defaults = {
@@ -31,8 +31,7 @@ describe('drawer views return valid SVG', () => {
   const cases = [
     ['front', renderFrontView, 'drawer-front'],
     ['side', renderSideView, 'drawer-side'],
-    ['top', renderTopView, 'drawer-top'],
-    ['iso', renderIsometric, 'drawer-iso']
+    ['top', renderTopView, 'drawer-top']
   ];
 
   for (const [name, fn, testid] of cases) {
@@ -97,13 +96,6 @@ describe('view content', () => {
     const rects = svg.querySelectorAll('rect');
     // background + bottom panel + 4 walls + inner outline = at least 6
     expect(rects.length).toBeGreaterThanOrEqual(6);
-  });
-
-  it('isometric view includes a part legend', () => {
-    const svg = renderIsometric(doc, dims, formatInches);
-    const text = svg.textContent;
-    expect(text).toContain('Front');
-    expect(text).toContain('Bottom');
   });
 
   it('produces different geometry when dimensions change', () => {

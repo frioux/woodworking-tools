@@ -1,5 +1,5 @@
 import { calculateDrawer, formatInches } from './drawer-math.js';
-import { renderFrontView, renderSideView, renderTopView, renderIsometric } from './drawer-diagrams.js';
+import { renderFrontView, renderSideView, renderTopView } from './drawer-diagrams.js';
 
 const NUMBER_IDS = [
   'depth', 'width', 'height',
@@ -231,8 +231,7 @@ function renderDiagrams(d) {
   const targets = [
     ['diagram-front', renderFrontView],
     ['diagram-side', renderSideView],
-    ['diagram-top', renderTopView],
-    ['diagram-iso', renderIsometric]
+    ['diagram-top', renderTopView]
   ];
   for (const [id, renderFn] of targets) {
     const container = document.getElementById(id);

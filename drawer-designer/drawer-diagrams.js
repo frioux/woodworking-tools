@@ -52,6 +52,15 @@ function line(doc, x1, y1, x2, y2, stroke, sw = 0.4, dash) {
   return svgEl(doc, 'line', attrs);
 }
 
+/** Darken (or lighten) a #rrggbb hex color by a multiplicative factor. */
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+  const b = Math.min(255, Math.round((n & 255) * f));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
 /** Horizontal dimension line with a centered label. */
 function hDimension(doc, x1, x2, y, label, above = true) {
   const g = svgEl(doc, 'g', { class: 'dim' });
@@ -327,56 +336,19 @@ export function renderTopView(doc, d, fmt) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Isometric (assembled, open-top tray)                              */
+/*  Isometric (exploded)                                             */
 /* ------------------------------------------------------------------ */
 
 /**
- * Assembled isometric view of the drawer (open top), color-coded by part.
+ * Exploded isometric view — the five parts pulled apart and drawn fully
+ * opaque, with simple per-face shading (top lightest, sides darker) instead
+ * of transparency. Color-coded by part.
  */
 export function renderIsometric(doc, d, _fmt) {
-  const angle = Math.PI / 6; // 30 degrees
-  const cos30 = Math.cos(angle);
-  const sin30 = Math.sin(angle);
-  const s = 2.4;
-  const originX = 70;
-  const originY = 40;
-
-  // x = width, y = depth, z = height
-  function iso(x, y, z) {
-    return {
-      px: originX + (x - y) * cos30 * s,
-      py: originY + (x + y) * sin30 * s - z * s
-    };
-  }
-
-  function face(pts, fill, stroke, opacity) {
-    const projected = pts.map(([x, y, z]) => iso(x, y, z));
-    const attrs = {
-      points: projected.map(p => `${p.px},${p.py}`).join(' '),
-      fill, stroke, 'stroke-width': 0.5
-    };
-    if (opacity !== undefined) attrs.opacity = opacity;
-    return svgEl(doc, 'polygon', attrs);
-  }
-
-  // Draw an axis-aligned box (footprint w x dp at x0,y0, rising h from z0).
-  function box(g, x0, y0, z0, bw, bd, bh, fill, dark) {
-    // top
-    g.appendChild(face([
-      [x0, y0, z0 + bh], [x0 + bw, y0, z0 + bh],
-      [x0 + bw, y0 + bd, z0 + bh], [x0, y0 + bd, z0 + bh]
-    ], fill, dark));
-    // front-right face (toward +x)
-    g.appendChild(face([
-      [x0 + bw, y0, z0 + bh], [x0 + bw, y0 + bd, z0 + bh],
-      [x0 + bw, y0 + bd, z0], [x0 + bw, y0, z0]
-    ], fill, dark, 0.82));
-    // front-left face (toward +y)
-    g.appendChild(face([
-      [x0, y0 + bd, z0 + bh], [x0 + bw, y0 + bd, z0 + bh],
-      [x0 + bw, y0 + bd, z0], [x0, y0 + bd, z0]
-    ], fill, dark, 0.68));
-  }
+  const angle = Math.PI / 6; // 30°
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const s = 2.6;
 
   const W = d.width;
   const D = d.depth;
@@ -384,25 +356,88 @@ export function renderIsometric(doc, d, _fmt) {
   const ft = d.frontThickness;
   const bt = d.backThickness;
   const st = d.sideThickness;
-  const bz = d.grooveFromBottom; // bottom panel height off the drawer base
+  const btm = d.bottomThickness;
+  const bz = d.grooveFromBottom;
 
-  const vbW = (W + D) * cos30 * s + 90;
-  const vbH = (W + D) * sin30 * s + H * s + 70;
+  // Project model space (x = width, y = depth, z = height) to the screen.
+  // y is flipped (b = D - y) so the drawer front sits nearest the viewer.
+  function iso(x, y, z) {
+    const b = D - y;
+    return [(x - b) * cos * s, (x + b) * sin * s - z * s];
+  }
+
+  // Explosion offsets pull each part away from the assembled position.
+  const ex = Math.max(W * 0.4, 4);
+  const ey = Math.max(D * 0.4, 4);
+  const ez = Math.max(H * 1.6, 6);
+
+  // Each part: assembled box [x0, y0, z0, w, d, h], explode offset, color.
+  // Drawn far-to-near so nearer parts cleanly overdraw farther ones.
+  const pieces = [
+    { b: [0, D - bt, 0, W, bt, H], o: [0, ey, 0], c: COLORS.secondary },                 // back
+    { b: [0, 0, 0, st, D, H], o: [-ex, 0, 0], c: COLORS.secondary },                     // left side
+    { b: [W - st, 0, 0, st, D, H], o: [ex, 0, 0], c: COLORS.secondary },                 // right side
+    { b: [0, 0, 0, W, ft, H], o: [0, -ey, 0], c: COLORS.front },                         // front
+    { b: [st, ft, bz, W - 2 * st, D - ft - bt, btm], o: [0, 0, -ez], c: COLORS.bottom }  // bottom
+  ];
+
+  // Resolve absolute corners and track the projected bounds for the viewBox.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const resolved = pieces.map(({ b, o, c }) => {
+    const [x0, y0, z0, w, dp, h] = b;
+    const X0 = x0 + o[0], Y0 = y0 + o[1], Z0 = z0 + o[2];
+    const X1 = X0 + w, Y1 = Y0 + dp, Z1 = Z0 + h;
+    for (const X of [X0, X1]) {
+      for (const Y of [Y0, Y1]) {
+        for (const Z of [Z0, Z1]) {
+          const [px, py] = iso(X, Y, Z);
+          if (px < minX) minX = px;
+          if (px > maxX) maxX = px;
+          if (py < minY) minY = py;
+          if (py > maxY) maxY = py;
+        }
+      }
+    }
+    return { X0, Y0, Z0, X1, Y1, Z1, c };
+  });
+
+  const pad = 12;
+  const legendH = 32;
+  const vbX = minX - pad;
+  const vbY = minY - pad;
+  const vbW = (maxX - minX) + 2 * pad;
+  const vbH = (maxY - minY) + 2 * pad + legendH;
 
   const svg = svgEl(doc, 'svg', {
-    viewBox: `0 0 ${vbW} ${vbH}`,
+    viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`,
     xmlns: SVG_NS,
     'data-testid': 'drawer-iso'
   });
-  svg.appendChild(rect(doc, 0, 0, vbW, vbH, COLORS.bg, 'none', 0));
+  svg.appendChild(rect(doc, vbX, vbY, vbW, vbH, COLORS.bg, 'none', 0));
 
-  // Painter's order: back wall, left & right sides, bottom panel, then front.
-  box(svg, 0, D - bt, 0, W, bt, H, COLORS.secondary, COLORS.secondaryDark);   // back
-  box(svg, 0, 0, 0, st, D, H, COLORS.secondary, COLORS.secondaryDark);        // left side
-  box(svg, W - st, 0, 0, st, D, H, COLORS.secondary, COLORS.secondaryDark);   // right side
-  box(svg, st, ft, bz, W - 2 * st, D - ft - bt, d.bottomThickness,
-    COLORS.bottom, COLORS.bottomDark);                                        // bottom panel
-  box(svg, 0, 0, 0, W, ft, H, COLORS.front, COLORS.frontDark);               // front
+  const poly = (pts, fill) => svgEl(doc, 'polygon', {
+    points: pts.map(([px, py]) => `${px},${py}`).join(' '),
+    fill, stroke: COLORS.groove, 'stroke-width': 0.5
+  });
+
+  for (const p of resolved) {
+    const c = (x, y, z) => iso(x, y, z);
+    const topFill = p.c;                // top — lightest
+    const xFill = shade(p.c, 0.86);     // +x face
+    const yFill = shade(p.c, 0.72);     // front (-y) face — darkest
+    // Top face
+    svg.appendChild(poly([
+      c(p.X0, p.Y0, p.Z1), c(p.X1, p.Y0, p.Z1), c(p.X1, p.Y1, p.Z1), c(p.X0, p.Y1, p.Z1)
+    ], topFill));
+    // Max-x face (right)
+    svg.appendChild(poly([
+      c(p.X1, p.Y0, p.Z1), c(p.X1, p.Y1, p.Z1), c(p.X1, p.Y1, p.Z0), c(p.X1, p.Y0, p.Z0)
+    ], xFill));
+    // Min-y face (front, nearest the viewer)
+    svg.appendChild(poly([
+      c(p.X0, p.Y0, p.Z1), c(p.X1, p.Y0, p.Z1), c(p.X1, p.Y0, p.Z0), c(p.X0, p.Y0, p.Z0)
+    ], yFill));
+  }
 
   // Part legend
   const legend = [
@@ -411,10 +446,10 @@ export function renderIsometric(doc, d, _fmt) {
     ['Bottom', COLORS.bottom]
   ];
   legend.forEach(([label, color], i) => {
-    const ly = vbH - 26 + i * 8;
-    svg.appendChild(rect(doc, 8, ly - 4, 5, 5, color, COLORS.groove, 0.4));
+    const ly = vbY + vbH - legendH + 9 + i * 9;
+    svg.appendChild(rect(doc, vbX + 6, ly - 5, 6, 6, color, COLORS.groove, 0.4));
     const t = svgEl(doc, 'text', {
-      x: 16, y: ly, fill: COLORS.dimension, 'font-size': 5, 'font-family': 'sans-serif'
+      x: vbX + 15, y: ly, fill: COLORS.dimension, 'font-size': 5.5, 'font-family': 'sans-serif'
     });
     t.textContent = label;
     svg.appendChild(t);

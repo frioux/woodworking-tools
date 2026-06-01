@@ -1,6 +1,6 @@
 export default [
   {
-    files: ['frame-designer/**/*.js', 'rocker-model/**/*.js', 'milk-paint/**/*.js', 'tests/**/*.js'],
+    files: ['frame-designer/**/*.js', 'rocker-model/**/*.js', 'milk-paint/**/*.js', 'drawer-designer/**/*.js', 'tests/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

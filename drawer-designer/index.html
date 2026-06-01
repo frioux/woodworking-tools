@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drawer Designer - Woodworking Tools</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="../index.html">&larr; All Tools</a>
+    <h1>Drawer Designer</h1>
+  </header>
+
+  <div class="layout">
+    <!-- Input form -->
+    <section class="form-panel">
+      <h2>Dimensions (inches)</h2>
+
+      <div class="form-group">
+        <label for="depth">Depth (front to back) <span class="validation-error" id="error-depth"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="depth" data-dir="down" aria-label="Decrease depth">&minus;</button>
+          <input type="number" id="depth" value="20" min="1" step="0.25">
+          <button type="button" class="stepper" data-for="depth" data-dir="up" aria-label="Increase depth">+</button>
+          <span class="imperial" data-for="depth"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="width">Width (side to side) <span class="validation-error" id="error-width"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="width" data-dir="down" aria-label="Decrease width">&minus;</button>
+          <input type="number" id="width" value="24" min="1" step="0.25">
+          <button type="button" class="stepper" data-for="width" data-dir="up" aria-label="Increase width">+</button>
+          <span class="imperial" data-for="width"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="height">Height (top to bottom) <span class="validation-error" id="error-height"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="height" data-dir="down" aria-label="Decrease height">&minus;</button>
+          <input type="number" id="height" value="6" min="1" step="0.25">
+          <button type="button" class="stepper" data-for="height" data-dir="up" aria-label="Increase height">+</button>
+          <span class="imperial" data-for="height"></span>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+      <h2>Stock</h2>
+
+      <div class="form-group">
+        <label for="front-thickness">Front thickness <span class="validation-error" id="error-front-thickness"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="front-thickness" data-dir="down" aria-label="Decrease front thickness">&minus;</button>
+          <input type="number" id="front-thickness" value="0.75" min="0.25" step="0.0625">
+          <button type="button" class="stepper" data-for="front-thickness" data-dir="up" aria-label="Increase front thickness">+</button>
+          <span class="imperial" data-for="front-thickness"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="side-thickness">Secondary thickness (sides &amp; back) <span class="validation-error" id="error-side-thickness"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="side-thickness" data-dir="down" aria-label="Decrease secondary thickness">&minus;</button>
+          <input type="number" id="side-thickness" value="0.5" min="0.25" step="0.0625">
+          <button type="button" class="stepper" data-for="side-thickness" data-dir="up" aria-label="Increase secondary thickness">+</button>
+          <span class="imperial" data-for="side-thickness"></span>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+      <h2>Joinery</h2>
+
+      <div class="form-group">
+        <label class="checkbox-row">
+          <input type="checkbox" id="half-blind-front">
+          <span>Half-blind dovetails at front</span>
+        </label>
+        <p class="hint">Off = through dovetails all the way around.</p>
+      </div>
+
+      <hr class="section-divider">
+      <h2>Bottom &amp; Groove</h2>
+
+      <div class="form-group">
+        <label for="bottom-thickness">Bottom thickness <span class="validation-error" id="error-bottom-thickness"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="bottom-thickness" data-dir="down" aria-label="Decrease bottom thickness">&minus;</button>
+          <input type="number" id="bottom-thickness" value="0.25" min="0.0625" step="0.0625">
+          <button type="button" class="stepper" data-for="bottom-thickness" data-dir="up" aria-label="Increase bottom thickness">+</button>
+          <span class="imperial" data-for="bottom-thickness"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="groove-depth">Groove depth <span class="validation-error" id="error-groove-depth"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="groove-depth" data-dir="down" aria-label="Decrease groove depth">&minus;</button>
+          <input type="number" id="groove-depth" value="0.25" min="0.0625" step="0.0625">
+          <button type="button" class="stepper" data-for="groove-depth" data-dir="up" aria-label="Increase groove depth">+</button>
+          <span class="imperial" data-for="groove-depth"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="groove-from-bottom">Groove off bottom <span class="validation-error" id="error-groove-from-bottom"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="groove-from-bottom" data-dir="down" aria-label="Decrease groove offset">&minus;</button>
+          <input type="number" id="groove-from-bottom" value="0.375" min="0" step="0.0625">
+          <button type="button" class="stepper" data-for="groove-from-bottom" data-dir="up" aria-label="Increase groove offset">+</button>
+          <span class="imperial" data-for="groove-from-bottom"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cut list and derived values -->
+    <section class="cut-list" id="cut-list">
+      <h2>Cut List</h2>
+      <div id="cut-list-content"></div>
+    </section>
+
+    <!-- Diagram area -->
+    <section class="diagrams">
+      <div class="diagram-card">
+        <h3>Front View</h3>
+        <div id="diagram-front"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Side View</h3>
+        <div id="diagram-side"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Top View</h3>
+        <div id="diagram-top"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Isometric View</h3>
+        <div id="diagram-iso"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="site-footer">
+    <a href="https://foolishwood.substack.com" target="_blank" rel="noopener">foolishwood.substack.com</a>
+    <span class="sep">·</span>
+    <a href="https://frew.co" target="_blank" rel="noopener">frew.co</a>
+  </footer>
+
+  <script type="module" src="drawer-ui.js"></script>
+</body>
+</html>

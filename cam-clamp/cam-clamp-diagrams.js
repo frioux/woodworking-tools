@@ -79,8 +79,16 @@ function label(doc, x, y, text, anchor = 'start', size = 3.5) {
   return t;
 }
 
-/** Horizontal dimension line with a centered label. */
-function hDimension(doc, x1, x2, y, text, above = true, offsetMag = 8) {
+/** Rough rendered width of a dimension label (4-unit sans-serif). */
+function textWidth(text, size = 4) {
+  return text.length * size * 0.56;
+}
+
+/**
+ * Horizontal dimension line with a centered label. A label too wide to sit
+ * between the arrows goes just outside one end instead (`outside`).
+ */
+function hDimension(doc, x1, x2, y, text, above = true, offsetMag = 8, outside = 'right') {
   const g = svgEl(doc, 'g', { class: 'dim' });
   const offset = above ? -offsetMag : offsetMag;
   const tickDir = above ? 1 : -1;
@@ -100,9 +108,11 @@ function hDimension(doc, x1, x2, y, text, above = true, offsetMag = 8) {
   g.appendChild(line(doc, x1, y, x1, y + offset - tickDir * 3, COLORS.dimLine, 0.35));
   g.appendChild(line(doc, x2, y, x2, y + offset - tickDir * 3, COLORS.dimLine, 0.35));
 
+  const fits = textWidth(text) + 2 <= x2 - x1;
   const t = svgEl(doc, 'text', {
-    x: (x1 + x2) / 2, y: y + offset + (above ? -1.5 : 4.5),
-    'text-anchor': 'middle', fill: COLORS.dimension,
+    x: fits ? (x1 + x2) / 2 : (outside === 'left' ? x1 - 2.5 : x2 + 2.5),
+    y: fits ? y + offset + (above ? -1.5 : 4.5) : lineY + 1.4,
+    'text-anchor': fits ? 'middle' : (outside === 'left' ? 'end' : 'start'), fill: COLORS.dimension,
     'font-size': 4, 'font-family': 'sans-serif'
   });
   t.textContent = text;
@@ -110,7 +120,10 @@ function hDimension(doc, x1, x2, y, text, above = true, offsetMag = 8) {
   return g;
 }
 
-/** Vertical dimension line with a centered (rotated) label. */
+/**
+ * Vertical dimension line with a centered (rotated) label. A label too long
+ * to sit between the arrows is written level, beside the dimension line.
+ */
 function vDimension(doc, y1, y2, x, text, left = true, offsetMag = 8) {
   const g = svgEl(doc, 'g', { class: 'dim' });
   const offset = left ? -offsetMag : offsetMag;
@@ -131,14 +144,23 @@ function vDimension(doc, y1, y2, x, text, left = true, offsetMag = 8) {
   g.appendChild(line(doc, x, y1, x + offset - tickDir * 3, y1, COLORS.dimLine, 0.35));
   g.appendChild(line(doc, x, y2, x + offset - tickDir * 3, y2, COLORS.dimLine, 0.35));
 
-  const labelX = x + offset + (left ? -1.5 : 4);
   const labelY = (y1 + y2) / 2;
-  const t = svgEl(doc, 'text', {
-    x: labelX, y: labelY,
-    'text-anchor': 'middle', fill: COLORS.dimension,
-    'font-size': 4, 'font-family': 'sans-serif',
-    transform: `rotate(-90, ${labelX}, ${labelY})`
-  });
+  let t;
+  if (textWidth(text) + 2 <= Math.abs(y2 - y1)) {
+    const labelX = x + offset + (left ? -1.5 : 4);
+    t = svgEl(doc, 'text', {
+      x: labelX, y: labelY,
+      'text-anchor': 'middle', fill: COLORS.dimension,
+      'font-size': 4, 'font-family': 'sans-serif',
+      transform: `rotate(-90, ${labelX}, ${labelY})`
+    });
+  } else {
+    t = svgEl(doc, 'text', {
+      x: lineX + (left ? -2 : 2), y: labelY + 1.4,
+      'text-anchor': left ? 'end' : 'start', fill: COLORS.dimension,
+      'font-size': 4, 'font-family': 'sans-serif'
+    });
+  }
   t.textContent = text;
   g.appendChild(t);
   return g;
@@ -275,6 +297,19 @@ function leverExtent(d) {
 }
 
 /**
+ * The "handle swings down" arrow: an arc about the pivot (radius in inches,
+ * SVG angles in degrees). It starts below the row of dimensions under the
+ * jaw so it never runs through their labels.
+ */
+function swingArc(d) {
+  const clearBelow = d.slidingHeight + 17 / SCALE - d.pivotY;  // below the dim row
+  const r = Math.max(d.centerDistance * 0.6, clearBelow / 0.8);
+  const handleAt = 180 - d.restTiltDeg;   // SVG angle of the handle at rest
+  const from = Math.min(handleAt - 12, 180 - Math.asin(clearBelow / r) * 180 / Math.PI);
+  return { r, from, to: handleAt - d.camSwing + 15 };
+}
+
+/**
  * Sliding jaw side view, with the lever at rest in its slot. Pad sits above
  * y=0. With showSwing, a ghosted lever is drawn swung down to the clamped
  * position with motion arrows, as in the plan.
@@ -339,10 +374,8 @@ function slidingJawSide(doc, d, { showLever = true, showBar = true, showSwing = 
     // Handle swings down (arc about the pivot); tongue is pushed up.
     const px = d.pivotX * s;
     const py = d.pivotY * s;
-    const swingR = (d.centerDistance * 0.6) * s;
-    const handleAt = 180 - d.restTiltDeg;   // SVG angle of the handle at rest
-    g.appendChild(swingArrow(doc, px, py, swingR, handleAt - 12, handleAt - d.camSwing + 15,
-      COLORS.motion));
+    const arc = swingArc(d);
+    g.appendChild(swingArrow(doc, px, py, arc.r * s, arc.from, arc.to, COLORS.motion));
     const ax = (d.padStart + d.padLength * 0.3) * s;
     const ay = -d.padThickness * s - 3;
     g.appendChild(line(doc, ax, ay, ax, ay - 7, COLORS.motion, 1.2));
@@ -389,11 +422,14 @@ export function renderAssembly(doc, d, fmt) {
   const J = d.jawLength * s;
   const L = d.barLength * s;
   const padL = 26;
-  const padR = Math.max(26, (d.slidingOffset + leverExtent(d).right - d.jawLength) * SCALE + 6);
+  const capLabel = `opens ${fmt(d.capacity)}`;
+  const padR = Math.max(26, 12 + textWidth(capLabel),
+    (d.slidingOffset + leverExtent(d).right - d.jawLength) * SCALE + 6);
   const padT = 18;
   // Leave room for the ghosted lever hanging below the sliding jaw.
   const slideTop = (d.barLength - d.slidingHeight) * s;
-  const padB = Math.max(10, slideTop + leverExtent(d).bottom * s + 8 - L);
+  const hangBelow = Math.max(leverExtent(d).bottom, d.pivotY + swingArc(d).r + 0.2);
+  const padB = Math.max(10, slideTop + hangBelow * s + 8 - L);
   const svg = svgRoot(doc, -padL, -padT, J + padL + padR, L + padT + padB, 'clamp-assembly');
 
   // Bar
@@ -423,7 +459,7 @@ export function renderAssembly(doc, d, fmt) {
   const capTop = d.fixedPadFace * s;
   const capBot = (d.barLength - d.slidingHeight - d.padThickness) * s;
   if (capBot > capTop) {
-    svg.appendChild(vDimension(doc, capTop, capBot, J, `opens ${fmt(d.capacity)}`, false));
+    svg.appendChild(vDimension(doc, capTop, capBot, J, capLabel, false));
   }
 
   return svg;
@@ -456,7 +492,7 @@ export function renderFixedJaw(doc, d, fmt) {
   svg.appendChild(vDimension(doc, 0, H, 0, fmt(d.fixedHeight), true));
   const below = H + d.padThickness * s;
   svg.appendChild(hDimension(doc, d.notchStart * s, d.padStart * s, below,
-    `notch ${fmt(d.notchLength)} × ${fmt(d.notchDepth)}`, false, 7));
+    `notch ${fmt(d.notchLength)} × ${fmt(d.notchDepth)}`, false, 16));
   svg.appendChild(hDimension(doc, d.padStart * s, J, below, fmt(d.padLength), false, 7));
   svg.appendChild(hDimension(doc, 0, d.notchStart * s, below, fmt(d.notchStart), false, 7));
 
@@ -496,9 +532,10 @@ export function renderSlidingJaw(doc, d, fmt) {
   const swung = leverExtent(d);
   const padR = Math.max(24, (swung.right - d.jawLength) * s + 6);
   // Note about the clamped lever sits under the dimensions and the handle.
-  const noteY = Math.max(H + 22, swung.bottom * s + 7);
+  const arc = swingArc(d);
+  const noteY = Math.max(H + 22, swung.bottom * s + 7, (d.pivotY + arc.r) * s + 8);
   const planY = Math.max(H + gap, swung.bottom * s + 22, noteY + 14);
-  const total = planY + T + 20;
+  const total = planY + T + 24;
 
   const svg = svgRoot(doc, -padL, -padT, J + padL + padR, total + padT, 'clamp-sliding-jaw');
 
@@ -528,9 +565,11 @@ export function renderSlidingJaw(doc, d, fmt) {
   svg.appendChild(vDimension(doc, planY, planY + T, 0, fmt(d.jawThickness), true));
   svg.appendChild(hDimension(doc, d.slidingMortiseStart * s,
     (d.slidingMortiseStart + d.slidingMortiseLength) * s, planY + T,
-    `${fmt(d.slidingMortiseLength)} × ${fmt(d.mortiseWidth)}`, false, 7));
+    fmt(d.slidingMortiseLength), false, 7, 'left'));
   svg.appendChild(hDimension(doc, d.leverSlotStart * s, J, planY + T,
-    `slot ${fmt(d.leverSlotLength)} × ${fmt(d.leverSlotWidth)}`, false, 7));
+    `slot ${fmt(d.leverSlotLength)}`, false, 7));
+  svg.appendChild(label(doc, 0, planY + T + 20,
+    `mortise ${fmt(d.mortiseWidth)} wide, lever slot ${fmt(d.leverSlotWidth)} wide`, 'start'));
 
   return svg;
 }
@@ -553,9 +592,10 @@ export function renderLever(doc, d, fmt) {
   const D = d.centerDistance * s;
   const padL = 26;
   const padT = 22;
-  const padB = 44;
-  // Match the jaw drawings' width so text renders at the same size.
-  const vbW = Math.max(L + padL + 34, d.jawLength * s + 40);
+  const padB = 50;
+  // Match the jaw drawings' width so text renders at the same size, and
+  // leave room for the notes underneath.
+  const vbW = Math.max(L + padL + 34, d.jawLength * s + 40, 130);
   const svg = svgRoot(doc, -padL, -padT, vbW, W + padT + padB, 'clamp-lever');
 
   // Head center, in the drawing's coordinates (blank's back-top corner = 0,0)
@@ -621,12 +661,12 @@ export function renderLever(doc, d, fmt) {
   svg.appendChild(ph);
 
   const noteX = vbW / 2 - padL;
-  svg.appendChild(label(doc, noteX, W + 30,
-    `pivot ${fmt(-d.leverPivot.x)} behind and ${fmt(-d.leverPivot.y)} above the head's center makes the head a cam`,
-    'middle'));
-  svg.appendChild(label(doc, noteX, W + 36,
-    `rise ${fmt(d.camRise)}; handle down ${d.camSwing}° (just past dead center) ` +
-    `flexes the tongue ${fmt(d.tongueFlex)} and locks`, 'middle'));
+  const notes = [
+    `pivot ${fmt(-d.leverPivot.x)} behind and ${fmt(-d.leverPivot.y)} above the head center`,
+    `makes the head a cam that rises ${fmt(d.camRise)}; clamped at ${d.camSwing}°,`,
+    `just past dead center, it flexes the tongue ${fmt(d.tongueFlex)} and locks`
+  ];
+  notes.forEach((n, i) => svg.appendChild(label(doc, noteX, W + 30 + 6 * i, n, 'middle')));
 
   return svg;
 }

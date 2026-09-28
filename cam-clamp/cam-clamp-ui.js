@@ -167,6 +167,14 @@ function renderCutList(d) {
     ['Pin 2', `${f(d.slidingPins[1].x)} in, ${f(d.slidingHeight - d.slidingPins[1].y)} from bottom`]
   ]));
 
+  container.appendChild(heading('Cam Lever'));
+  container.appendChild(definitionList([
+    ['Pivot hole', `${f(d.pinDiameter)} dia, ${f(d.camMaxRadius)} from nose, ${f(d.pivotBelowKerf)} from top edge`],
+    ['Cam nose', `R ${f(d.camRadius)}, center ${f(d.camEccentric)} ahead of the pivot`],
+    ['Cam rise', `${f(d.camRise)} over ${d.camSwing}° (closes the ${f(d.kerf)} kerf, then flexes the tongue ${f(d.tongueFlex)})`],
+    ['Handle', `tapers from ${f(d.leverWidth)} to ${f(d.handleEndWidth)} over ${f(d.handleTaperStart)}`]
+  ]));
+
   const note = document.createElement('p');
   note.className = 'hint';
   note.textContent = 'Layout measured from the back (bar) end of each jaw. ' +
@@ -177,7 +185,8 @@ function renderCutList(d) {
   container.appendChild(definitionList([
     ['Reach', f(d.jawReach)],
     ['Max opening', f(d.capacity)],
-    ['Rack angle to lock', `${d.lockAngleDeg.toFixed(1)}°`]
+    ['Rack angle to lock', `${d.lockAngleDeg.toFixed(1)}°`],
+    ['Clamping force', `≈ ${Math.round(d.clampForce / 5) * 5} lb (hardwood tongue, before the cork compresses)`]
   ]));
 }
 

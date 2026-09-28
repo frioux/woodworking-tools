@@ -84,9 +84,66 @@ describe('jaw details', () => {
     expect(allText(svg)).toContain('7/16"');
   });
 
-  it('lever labels its length and width', () => {
-    const text = allText(renderLever(doc, dims, formatInches));
+  it('lever labels its length, width, pivot and cam', () => {
+    const svg = renderLever(doc, dims, formatInches);
+    const text = allText(svg);
     expect(text).toContain('4-5/16"');
     expect(text).toContain('1-1/4"');
+    expect(text).toContain('5/8"');
+    expect(text).toContain('pivot 11/16" from nose');
+    expect(text).toContain('R 1/2"');
+    expect(text.some(t => /rise 3\/16"/.test(t))).toBe(true);
+    expect(svg.querySelector('[data-testid="pivot-hole"]')).toBeTruthy();
+    expect(svg.querySelector('[data-testid="cam-circle"]')).toBeTruthy();
+  });
+});
+
+describe('cam lever drawing', () => {
+  it('lever outline is an arc-and-taper path, not a rectangle', () => {
+    const svg = renderLever(doc, dims, formatInches);
+    const path = svg.querySelector('[data-testid="lever"] path');
+    const dAttr = path.getAttribute('d');
+    expect(dAttr).toMatch(/A 8 8 0 0 1/);      // R 1/2" at 16 units per inch
+    expect(dAttr.match(/L /g).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the cam circle center sits 3/16" ahead of the pivot hole', () => {
+    const svg = renderLever(doc, dims, formatInches);
+    const hole = svg.querySelector('[data-testid="pivot-hole"]');
+    const cam = svg.querySelector('[data-testid="cam-circle"]');
+    expect(Number(cam.getAttribute('cx')) - Number(hole.getAttribute('cx'))).toBeCloseTo(3);
+    expect(Number(cam.getAttribute('cy'))).toBeCloseTo(Number(hole.getAttribute('cy')));
+    expect(Number(cam.getAttribute('r'))).toBeCloseTo(8);
+  });
+
+  it('sliding jaw and assembly show the lever at rest and a swung ghost', () => {
+    for (const fn of [renderSlidingJaw, renderAssembly]) {
+      const svg = fn(doc, dims, formatInches);
+      const rest = svg.querySelector('[data-testid="lever"]');
+      const swung = svg.querySelector('[data-testid="lever-swung"]');
+      expect(rest).toBeTruthy();
+      expect(swung).toBeTruthy();
+      expect(rest.getAttribute('transform')).toContain('rotate(0)');
+      expect(swung.getAttribute('transform')).toContain('rotate(-90)');
+      // Both rotate about the jaw's pivot point
+      const pivot = `translate(${dims.pivotX * 16}, ${dims.pivotY * 16})`;
+      expect(rest.getAttribute('transform')).toContain(pivot);
+      expect(swung.getAttribute('transform')).toContain(pivot);
+    }
+  });
+
+  it('sliding jaw view labels the pivot location and the clamped state', () => {
+    const text = allText(renderSlidingJaw(doc, dims, formatInches));
+    expect(text).toContain('5/8"');
+    expect(text).toContain('1/2"');
+    expect(text.some(t => /clamped: handle down 90°/.test(t))).toBe(true);
+  });
+
+  it('assembly leaves room below the jaw for the swung handle', () => {
+    const svg = renderAssembly(doc, dims, formatInches);
+    const [, y, , h] = svg.getAttribute('viewBox').split(' ').map(Number);
+    const bottom = y + h;
+    const hang = (dims.barLength - dims.slidingHeight + dims.pivotY + dims.handleLength) * 16;
+    expect(bottom).toBeGreaterThan(hang);
   });
 });

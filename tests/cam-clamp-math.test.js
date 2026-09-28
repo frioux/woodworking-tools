@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  calculateClamp, validateClamp, clampWarnings, formatInches, PLAN
+  calculateClamp, validateClamp, clampWarnings, formatInches, PLAN,
+  camLift, tongueLift, leverProfile
 } from '../cam-clamp/cam-clamp-math.js';
 
 // The original Fine Woodworking plan: 1/4" x 1" x 8-1/2" bar.
@@ -56,6 +57,92 @@ describe('calculateClamp — original plan', () => {
       .toBeLessThan(d.reliefX - d.reliefDiameter / 2);
     expect(d.leverSlotStart).toBeGreaterThan(d.slidingMortiseStart + d.slidingMortiseLength);
     expect(d.pivotX).toBeGreaterThan(d.leverSlotStart);
+  });
+});
+
+describe('cam lever geometry', () => {
+  const d = calculateClamp(original);
+
+  it('pivot location agrees between the jaw and the lever', () => {
+    // Lever at rest: back end at the slot start, top edge on the kerf bottom.
+    expect(d.leverSlotStart + d.leverPivot.x).toBeCloseTo(d.pivotX);
+    expect(d.kerfBottom + d.leverPivot.y).toBeCloseTo(d.pivotY);
+    expect(d.leverPivot.x).toBeCloseTo(3 + 5 / 8);
+  });
+
+  it('the nose is an eccentric arc that just overhangs the jaw tip at rest', () => {
+    expect(d.camCenter.x - d.leverPivot.x).toBeCloseTo(PLAN.camEccentric);
+    expect(d.camCenter.y).toBeCloseTo(d.leverPivot.y);
+    expect(d.camMaxRadius).toBeCloseTo(11 / 16);
+    expect(d.camNoseOverhang).toBeCloseTo(1 / 16);
+    expect(d.leverSlotStart + d.leverLength - d.jawLength).toBeCloseTo(d.camNoseOverhang);
+    // At rest the top of the arc is flush with the lever's top edge.
+    expect(d.camCenter.y - d.camRadius).toBeCloseTo(0);
+  });
+
+  it('lifts 3/16 over 90°: the kerf closes first, then the tongue flexes 1/8', () => {
+    expect(camLift(d, 0)).toBeCloseTo(d.pivotBelowKerf);
+    expect(camLift(d, 90)).toBeCloseTo(d.pivotBelowKerf + d.camRise);
+    expect(d.camRise).toBeCloseTo(3 / 16);
+    expect(tongueLift(d, 0)).toBe(0);
+    expect(tongueLift(d, 10)).toBe(0);              // still inside the kerf
+    expect(tongueLift(d, 90)).toBeCloseTo(1 / 8);
+    expect(d.tongueFlex).toBeCloseTo(1 / 8);
+    // Monotonic up to dead center, and dead center is the maximum.
+    let prev = -1;
+    for (let a = 0; a <= 90; a += 5) {
+      expect(camLift(d, a)).toBeGreaterThan(prev);
+      prev = camLift(d, a);
+    }
+    expect(camLift(d, 100)).toBeLessThan(camLift(d, 90));
+  });
+
+  it('the nose never rises above the slot before the lever starts to swing', () => {
+    // Every outline point must be within camRadius+eccentric of the pivot and
+    // no point may sit above the top edge.
+    const p = leverProfile(d);
+    for (const seg of [p.top, p.heel, p.taper, p.back]) {
+      for (const [x, y] of seg) {
+        expect(y).toBeGreaterThanOrEqual(-1e-9);
+        expect(y).toBeLessThanOrEqual(d.leverWidth + 1e-9);
+        expect(Math.hypot(x - d.leverPivot.x, y - d.leverPivot.y))
+          .toBeLessThanOrEqual(Math.hypot(d.leverPivot.x, d.leverWidth - d.leverPivot.y) + 1e-9);
+      }
+    }
+  });
+
+  it('the heel is tangent to the nose arc and lands 9/16 behind the nose', () => {
+    expect(d.heelFoot.x).toBeCloseTo(d.leverLength - 9 / 16);
+    expect(d.heelFoot.y).toBe(d.leverWidth);
+    expect(Math.hypot(d.heelTop.x - d.camCenter.x, d.heelTop.y - d.camCenter.y)).toBeCloseTo(d.camRadius);
+    // Tangent: radius ⟂ heel line
+    const rx = d.heelTop.x - d.camCenter.x;
+    const ry = d.heelTop.y - d.camCenter.y;
+    const hx = d.heelFoot.x - d.heelTop.x;
+    const hy = d.heelFoot.y - d.heelTop.y;
+    expect(rx * hx + ry * hy).toBeCloseTo(0);
+    expect(d.heelTop.x).toBeGreaterThan(d.camCenter.x);  // on the nose side
+  });
+
+  it('the handle tapers from the heel to a 5/8 end', () => {
+    const p = leverProfile(d);
+    expect(p.taper[0]).toEqual([d.heelFoot.x, d.heelFoot.y]);
+    expect(p.taper[1]).toEqual([0, 5 / 8]);
+    expect(d.handleTaperStart).toBeCloseTo(3.75);
+  });
+
+  it('estimates a plausible clamping force for the original plan', () => {
+    expect(d.tongueSpan).toBeCloseTo(d.tongueLength - d.pivotFromTip);
+    expect(d.clampForce).toBeGreaterThan(40);
+    expect(d.clampForce).toBeLessThan(100);
+  });
+
+  it('keeps the cam geometry fixed and the handle growing with reach', () => {
+    const b = calculateClamp({ ...original, jawReach: 8 });
+    expect(b.camMaxRadius).toBe(d.camMaxRadius);
+    expect(b.camRise).toBe(d.camRise);
+    expect(b.handleLength - d.handleLength).toBeCloseTo(3.25);
+    expect(b.leverSlotStart + b.leverPivot.x).toBeCloseTo(b.pivotX);
   });
 });
 
@@ -130,6 +217,12 @@ describe('clampWarnings', () => {
   it('warns about a light bar', () => {
     const w = clampWarnings(calculateClamp({ ...original, barThickness: 0.125 }));
     expect(w.some(s => /bar/i.test(s))).toBe(true);
+  });
+
+  it('warns when a long tongue makes the cam weak', () => {
+    const w = clampWarnings(calculateClamp({ ...original, jawReach: 8 }));
+    expect(w.some(s => /Weak cam/.test(s))).toBe(true);
+    expect(clampWarnings(calculateClamp({ ...original, jawReach: 5 })).some(s => /Weak cam/.test(s))).toBe(false);
   });
 
   it('warns when jaws are thickened', () => {

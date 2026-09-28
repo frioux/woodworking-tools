@@ -12,7 +12,9 @@
  *     pins bind on the bar and lock the jaw.
  *   - A 1/16" kerf, started from a 1/4" relief hole, splits a thin tongue off
  *     the top of the sliding jaw. A cam lever pivots in a slot in the lower
- *     body; turning it flexes the tongue up against the work.
+ *     body. At rest it lies in the slot with its handle pointing back toward
+ *     the bar; swinging the handle down 90° rotates an eccentric nose up
+ *     against the underside of the tongue and flexes it against the work.
  *   - Cork pads sit on raised seats at the tips of both jaws.
  *
  * "Jaw reach" is measured from the inside face of the bar to the jaw tip.
@@ -42,7 +44,20 @@ export const PLAN = {
   leverThickness: 3 / 16,
   leverWidth: 1.25,
   pivotFromTip: 5 / 8,
-  pivotBelowKerf: 1 / 2
+  pivotBelowKerf: 1 / 2,
+
+  // Cam lever. The nose is a circular arc whose center sits ahead of the
+  // pivot (toward the jaw tip), so the arc is an eccentric cam: at rest its
+  // top is flush with the lever's top edge, 1/2" above the pivot; swung 90°
+  // the eccentricity has rotated to point straight up and the nose stands
+  // 1/2" + 3/16" above the pivot. The 3/16" rise closes the 1/16" kerf and
+  // then flexes the tongue 1/8".
+  camRadius: 1 / 2,
+  camEccentric: 3 / 16,
+  camSwing: 90,               // degrees from released (in the slot) to clamped
+  handleEndWidth: 5 / 8,      // the handle tapers from full width to this
+  heelFromNose: 9 / 16,       // the heel meets the bottom edge this far behind the nose
+  tongueModulus: 1.7e6        // psi, typical for beech / maple / birch
 };
 
 /**
@@ -126,12 +141,41 @@ export function calculateClamp(params) {
   const reliefY = kerfTop + P.kerf / 2;
   const tongueLength = jawLength - reliefX;
 
-  // Lever and its slot (slot is open at the bottom and the tip)
-  const leverLength = tongueLength;
-  const leverSlotLength = tongueLength - 1 / 16;
-  const leverSlotStart = jawLength - leverSlotLength;
+  // Lever and its slot (slot is open at the bottom and the tip).
+  // The pivot is located in the jaw; the lever blank is as long as the tongue
+  // and the cam nose reaches camMaxRadius ahead of the pivot, so the handle
+  // gets whatever is left. At rest the nose overhangs the jaw tip slightly.
   const pivotX = jawLength - P.pivotFromTip;
   const pivotY = kerfBottom + P.pivotBelowKerf;
+  const camMaxRadius = P.camRadius + P.camEccentric;
+  const camRise = camMaxRadius - P.pivotBelowKerf;   // = camEccentric
+  const tongueFlex = camRise - P.kerf;
+  const leverLength = tongueLength;
+  const handleLength = leverLength - camMaxRadius;
+  // Lever-local coordinates: origin at the back (handle) end, top edge; y down.
+  const leverPivot = { x: handleLength, y: P.pivotBelowKerf };
+  const camCenter = { x: handleLength + P.camEccentric, y: P.pivotBelowKerf };
+  const camNoseOverhang = camMaxRadius - P.pivotFromTip;
+  // Heel: a straight line from a point on the bottom edge, heelFromNose
+  // behind the nose, tangent to the nose arc on its lower-right. The handle
+  // tapers in one straight line from the heel foot to the narrow back end.
+  const heelFoot = { x: leverLength - P.heelFromNose, y: P.leverWidth };
+  const toFoot = { x: heelFoot.x - camCenter.x, y: heelFoot.y - camCenter.y };
+  const footDist = Math.hypot(toFoot.x, toFoot.y);
+  const tangentAngle = Math.atan2(toFoot.y, toFoot.x) - Math.acos(P.camRadius / footDist);
+  const heelTop = {
+    x: camCenter.x + P.camRadius * Math.cos(tangentAngle),
+    y: camCenter.y + P.camRadius * Math.sin(tangentAngle)
+  };
+  const handleTaperStart = heelFoot.x;
+  const leverSlotStart = pivotX - leverPivot.x;
+  const leverSlotLength = jawLength - leverSlotStart;
+
+  // Clamping force: the tongue is a cantilever from the relief hole, pushed
+  // up tongueFlex by the cam directly above the pivot. P = 3EIδ / L³.
+  const tongueSpan = pivotX - reliefX;
+  const tongueI = jawThickness * P.tongueThickness ** 3 / 12;
+  const clampForce = 3 * P.tongueModulus * tongueI * tongueFlex / tongueSpan ** 3;
 
   // --- Assembly ---
   // Bar top flush with the fixed jaw top. Maximum opening is with the sliding
@@ -166,8 +210,65 @@ export function calculateClamp(params) {
     leverSlotWidth: P.leverThickness, leverSlotLength, leverSlotStart,
     pivotX, pivotY, pivotFromTip: P.pivotFromTip, pivotBelowKerf: P.pivotBelowKerf,
 
+    // Cam lever (lever-local coordinates unless noted)
+    leverPivot, handleLength, camCenter,
+    camRadius: P.camRadius, camEccentric: P.camEccentric, camMaxRadius,
+    camRise, camSwing: P.camSwing, camNoseOverhang, tongueFlex,
+    handleEndWidth: P.handleEndWidth,
+    heelTop, heelFoot, handleTaperStart,
+    tongueSpan, clampForce,
+
     // Assembly
     fixedPadFace, capacity
+  };
+}
+
+/**
+ * Height of the cam's contact point above the pivot when the lever has been
+ * swung `deg` degrees from its rest position in the slot. The nose is a
+ * circle of camRadius about a center camEccentric ahead of the pivot, so the
+ * lift is camRadius + camEccentric·sin(deg): flush with the lever's top edge
+ * at 0°, and at its maximum (dead center) at 90°.
+ * @param {object} d - result of calculateClamp
+ * @param {number} deg - swing angle, 0 (released) .. camSwing (clamped)
+ * @returns {number} inches above the pivot
+ */
+export function camLift(d, deg) {
+  return d.camRadius + d.camEccentric * Math.sin(deg * Math.PI / 180);
+}
+
+/**
+ * How far the cam has pushed the tongue up at a given swing angle
+ * (0 until the kerf has closed).
+ * @param {object} d - result of calculateClamp
+ * @param {number} deg
+ * @returns {number} inches
+ */
+export function tongueLift(d, deg) {
+  return Math.max(0, camLift(d, deg) - d.pivotBelowKerf - d.kerf);
+}
+
+/**
+ * Outline of the cam lever in lever-local inches (origin at the back end of
+ * the handle, top edge; x toward the nose, y down). Going clockwise from the
+ * origin: straight top edge → cam nose arc (clockwise about camCenter, from
+ * the top of the circle round past the tip) → the heel, tangent to the arc,
+ * down to the bottom edge → one straight taper up to the narrow handle end
+ * → back edge.
+ * @param {object} d - result of calculateClamp
+ * @returns {{top: number[][], arc: object, heel: number[][], taper: number[][], back: number[][]}}
+ */
+export function leverProfile(d) {
+  const c = d.camCenter;
+  const T = [d.heelTop.x, d.heelTop.y];
+  const B = [d.heelFoot.x, d.heelFoot.y];
+  const backBottom = [0, d.handleEndWidth];
+  return {
+    top: [[0, 0], [c.x, 0]],
+    arc: { cx: c.x, cy: c.y, r: d.camRadius, from: [c.x, 0], to: T },
+    heel: [T, B],
+    taper: [B, backBottom],
+    back: [backBottom, [0, 0]]
   };
 }
 
@@ -214,6 +315,11 @@ export function clampWarnings(d) {
   const barArea = d.barThickness * d.barWidth;
   if (barArea < 0.25 || (d.barLength > 14 && barArea <= 0.25)) {
     w.push('Light bar for its length — it may bend under clamping pressure.');
+  }
+  if (d.clampForce < 25) {
+    w.push(`Weak cam: with a ${formatInches(d.tongueSpan)} tongue span the cam's ` +
+      `${formatInches(d.tongueFlex)} of flex only develops about ${Math.round(d.clampForce)} lb. ` +
+      'Keep the reach short for real clamping pressure.');
   }
   if (d.jawThickness > PLAN.minJawThickness) {
     w.push(`Jaws thickened to ${formatInches(d.jawThickness)} to keep ` +

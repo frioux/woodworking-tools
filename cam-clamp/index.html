@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cam Clamp Designer - Woodworking Tools</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="../index.html">&larr; All Tools</a>
+    <h1>Cam Clamp Designer</h1>
+  </header>
+
+  <div class="layout">
+    <!-- Input form -->
+    <section class="form-panel">
+      <p class="intro">A parameterized version of the Fine Woodworking shopmade cam clamp. Defaults match the original plan.</p>
+
+      <h2>Bar (inches)</h2>
+
+      <div class="form-group">
+        <label for="bar-thickness">Bar thickness <span class="validation-error" id="error-bar-thickness"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="bar-thickness" data-dir="down" aria-label="Decrease bar thickness">&minus;</button>
+          <input type="number" id="bar-thickness" value="0.25" min="0.0625" step="0.0625">
+          <button type="button" class="stepper" data-for="bar-thickness" data-dir="up" aria-label="Increase bar thickness">+</button>
+          <span class="imperial" data-for="bar-thickness"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="bar-width">Bar width <span class="validation-error" id="error-bar-width"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="bar-width" data-dir="down" aria-label="Decrease bar width">&minus;</button>
+          <input type="number" id="bar-width" value="1" min="0.5" step="0.125">
+          <button type="button" class="stepper" data-for="bar-width" data-dir="up" aria-label="Increase bar width">+</button>
+          <span class="imperial" data-for="bar-width"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="bar-length">Bar length <span class="validation-error" id="error-bar-length"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="bar-length" data-dir="down" aria-label="Decrease bar length">&minus;</button>
+          <input type="number" id="bar-length" value="8.5" min="4" step="0.5">
+          <button type="button" class="stepper" data-for="bar-length" data-dir="up" aria-label="Increase bar length">+</button>
+          <span class="imperial" data-for="bar-length"></span>
+        </div>
+        <p class="hint">Sets how wide the clamp opens.</p>
+      </div>
+
+      <hr class="section-divider">
+      <h2>Jaws</h2>
+
+      <div class="form-group">
+        <label for="jaw-reach">Jaw depth (reach) <span class="validation-error" id="error-jaw-reach"></span></label>
+        <div class="input-row">
+          <button type="button" class="stepper" data-for="jaw-reach" data-dir="down" aria-label="Decrease jaw reach">&minus;</button>
+          <input type="number" id="jaw-reach" value="4.75" min="3" step="0.25">
+          <button type="button" class="stepper" data-for="jaw-reach" data-dir="up" aria-label="Increase jaw reach">+</button>
+          <span class="imperial" data-for="jaw-reach"></span>
+        </div>
+        <p class="hint">Inside face of the bar to the tip of the jaw.</p>
+      </div>
+
+      <ul class="warnings" id="warnings"></ul>
+    </section>
+
+    <!-- Cut list and derived values -->
+    <section class="cut-list" id="cut-list">
+      <h2>Cut List</h2>
+      <div id="cut-list-content"></div>
+    </section>
+
+    <!-- Diagram area -->
+    <section class="diagrams">
+      <div class="diagram-card">
+        <h3>Assembled (fully open)</h3>
+        <div id="diagram-assembly"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Fixed Jaw</h3>
+        <div id="diagram-fixed"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Sliding Jaw</h3>
+        <div id="diagram-sliding"></div>
+      </div>
+      <div class="diagram-card">
+        <h3>Cam Lever</h3>
+        <div id="diagram-lever"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="site-footer">
+    <a href="https://foolishwood.substack.com" target="_blank" rel="noopener">foolishwood.substack.com</a>
+    <span class="sep">·</span>
+    <a href="https://frew.co" target="_blank" rel="noopener">frew.co</a>
+  </footer>
+
+  <script type="module" src="cam-clamp-ui.js"></script>
+</body>
+</html>

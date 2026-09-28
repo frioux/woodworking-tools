@@ -12,9 +12,10 @@
  *     pins bind on the bar and lock the jaw.
  *   - A 1/16" kerf, started from a 1/4" relief hole, splits a thin tongue off
  *     the top of the sliding jaw. A cam lever pivots in a slot in the lower
- *     body. At rest it lies in the slot with its handle pointing back toward
- *     the bar; swinging the handle down 90° rotates an eccentric nose up
- *     against the underside of the tongue and flexes it against the work.
+ *     body. At rest it droops in the slot with its handle pointing back toward
+ *     the bar and hanging just below the jaw; swinging the handle down rolls
+ *     its eccentric round head up against the underside of the tongue,
+ *     flexing it against the work, and stops just past dead center.
  *   - Cork pads sit on raised seats at the tips of both jaws.
  *
  * "Jaw reach" is measured from the inside face of the bar to the jaw tip.
@@ -36,27 +37,28 @@ export const PLAN = {
   padThickness: 3 / 16,     // cork
   tongueThickness: 7 / 16,
   kerf: 1 / 16,
-  lowerBody: 1.25,          // sliding jaw below the kerf (= lever width)
+  lowerBody: 1.25,          // sliding jaw below the kerf
   reliefDiameter: 1 / 4,
   reliefFromBar: 7 / 16,    // relief hole center in front of the bar
   pinDiameter: 1 / 8,
   pinGripClearance: 1 / 16, // sliding-jaw pin gap over the bar width
   leverThickness: 3 / 16,
-  leverWidth: 1.25,
   pivotFromTip: 5 / 8,
   pivotBelowKerf: 1 / 2,
 
-  // Cam lever. The nose is a circular arc whose center sits ahead of the
-  // pivot (toward the jaw tip), so the arc is an eccentric cam: at rest its
-  // top is flush with the lever's top edge, 1/2" above the pivot; swung 90°
-  // the eccentricity has rotated to point straight up and the nose stands
-  // 1/2" + 3/16" above the pivot. The 3/16" rise closes the 1/16" kerf and
-  // then flexes the tongue 1/8".
-  camRadius: 1 / 2,
-  camEccentric: 3 / 16,
-  camSwing: 90,               // degrees from released (in the slot) to clamped
-  handleEndWidth: 5 / 8,      // the handle tapers from full width to this
-  heelFromNose: 9 / 16,       // the heel meets the bottom edge this far behind the nose
+  // Cam lever: a teardrop — a round head and a smaller round handle end
+  // joined by straight lines tangent to both, so the outline has no corners.
+  // The pivot hole is off the head's center, which makes the head an
+  // eccentric cam. At rest the lever droops in its slot so the handle end
+  // hangs below the jaw (something to grab) and the head just clears the
+  // tongue; swinging the handle down rolls the head up into the tongue until
+  // just past dead center, where the load holds it shut.
+  headRadius: 9 / 16,
+  tailRadius: 5 / 16,
+  pivotBehindHead: 1 / 8,     // along the lever's centerline, toward the handle
+  pivotAboveAxis: 1 / 16,     // off the centerline, toward the top edge
+  handleDrop: 3 / 16,         // handle end hangs this far below the jaw at rest
+  overCenter: 3,              // degrees past dead center at the clamped stop
   tongueModulus: 1.7e6        // psi, typical for beech / maple / birch
 };
 
@@ -142,33 +144,58 @@ export function calculateClamp(params) {
   const tongueLength = jawLength - reliefX;
 
   // Lever and its slot (slot is open at the bottom and the tip).
-  // The pivot is located in the jaw; the lever blank is as long as the tongue
-  // and the cam nose reaches camMaxRadius ahead of the pivot, so the handle
-  // gets whatever is left. At rest the nose overhangs the jaw tip slightly.
+  // The lever blank is as long as the tongue. Lever coordinates ("axis
+  // frame"): origin at the head center, x along the centerline toward the
+  // nose, y down. Jaw coordinates below are relative to the pivot, y down.
   const pivotX = jawLength - P.pivotFromTip;
   const pivotY = kerfBottom + P.pivotBelowKerf;
-  const camMaxRadius = P.camRadius + P.camEccentric;
-  const camRise = camMaxRadius - P.pivotBelowKerf;   // = camEccentric
-  const tongueFlex = camRise - P.kerf;
   const leverLength = tongueLength;
-  const handleLength = leverLength - camMaxRadius;
-  // Lever-local coordinates: origin at the back (handle) end, top edge; y down.
-  const leverPivot = { x: handleLength, y: P.pivotBelowKerf };
-  const camCenter = { x: handleLength + P.camEccentric, y: P.pivotBelowKerf };
-  const camNoseOverhang = camMaxRadius - P.pivotFromTip;
-  // Heel: a straight line from a point on the bottom edge, heelFromNose
-  // behind the nose, tangent to the nose arc on its lower-right. The handle
-  // tapers in one straight line from the heel foot to the narrow back end.
-  const heelFoot = { x: leverLength - P.heelFromNose, y: P.leverWidth };
-  const toFoot = { x: heelFoot.x - camCenter.x, y: heelFoot.y - camCenter.y };
-  const footDist = Math.hypot(toFoot.x, toFoot.y);
-  const tangentAngle = Math.atan2(toFoot.y, toFoot.x) - Math.acos(P.camRadius / footDist);
-  const heelTop = {
-    x: camCenter.x + P.camRadius * Math.cos(tangentAngle),
-    y: camCenter.y + P.camRadius * Math.sin(tangentAngle)
+  const Rh = P.headRadius;
+  const Rt = P.tailRadius;
+  const centerDistance = leverLength - Rh - Rt;
+  const pa = P.pivotBehindHead;
+  const pb = P.pivotAboveAxis;
+  const leverPivot = { x: -pa, y: -pb };
+
+  // Rest tilt β: droop the handle until its end hangs handleDrop below the
+  // jaw. With the head center at rot(−β)(a, b), a/b = pivot behind/above the head center, from the pivot and the tail
+  // center D further back along the centerline:
+  //   (D − a)·sinβ + b·cosβ = (bottom below pivot) + drop − Rt
+  const bottomBelowPivot = P.lowerBody - P.pivotBelowKerf;
+  const K = bottomBelowPivot + P.handleDrop - Rt;
+  const restTilt = Math.asin(K / Math.hypot(centerDistance - pa, pb)) -
+    Math.atan2(pb, centerDistance - pa);
+  const restTiltDeg = restTilt * 180 / Math.PI;
+  const headCenterRest = {
+    x: pa * Math.cos(restTilt) + pb * Math.sin(restTilt),
+    y: -pa * Math.sin(restTilt) + pb * Math.cos(restTilt)
   };
-  const handleTaperStart = heelFoot.x;
-  const leverSlotStart = pivotX - leverPivot.x;
+  const tailCenterRest = {
+    x: headCenterRest.x - centerDistance * Math.cos(restTilt),
+    y: headCenterRest.y + centerDistance * Math.sin(restTilt)
+  };
+
+  // Cam action. Swinging the handle down θ rotates the head center up and
+  // forward; the head's top is then Rh + Cx·sinθ − Cy·cosθ above the pivot.
+  // Dead center (max lift) is where the head center is straight above the
+  // pivot; the clamped stop is a few degrees past it so the load can't
+  // push the lever back open.
+  const eccentricity = Math.hypot(headCenterRest.x, headCenterRest.y);
+  const deadCenter = 90 + Math.atan2(headCenterRest.y, headCenterRest.x) * 180 / Math.PI;
+  const camSwing = Math.ceil((deadCenter + P.overCenter) / 5) * 5;
+  const liftAt = deg => {
+    const t = deg * Math.PI / 180;
+    return Rh + headCenterRest.x * Math.sin(t) - headCenterRest.y * Math.cos(t);
+  };
+  const restLift = liftAt(0);
+  const contactLift = P.pivotBelowKerf + P.kerf;   // underside of the tongue
+  const camRise = Rh + eccentricity - restLift;
+  const tongueFlex = liftAt(camSwing) - contactLift;
+  const noseOverhang = headCenterRest.x + Rh - P.pivotFromTip;
+
+  // Slot runs from just behind the handle end (rounded to a 1/16" layout
+  // mark) out through the tip.
+  const leverSlotStart = Math.floor((pivotX + tailCenterRest.x - Rt - 1 / 32) * 16) / 16;
   const leverSlotLength = jawLength - leverSlotStart;
 
   // Clamping force: the tongue is a cantilever from the relief hole, pushed
@@ -191,7 +218,7 @@ export function calculateClamp(params) {
     jawThickness, jawLength, fixedHeight, slidingHeight,
     padLength: P.padLength, padThickness: P.padThickness,
     pinDiameter: P.pinDiameter, pinLength: jawThickness,
-    leverThickness: P.leverThickness, leverWidth: P.leverWidth, leverLength,
+    leverThickness: P.leverThickness, leverWidth: 2 * Rh, leverLength,
 
     // Shared layout
     barInset: P.barInset, barFront,
@@ -210,12 +237,13 @@ export function calculateClamp(params) {
     leverSlotWidth: P.leverThickness, leverSlotLength, leverSlotStart,
     pivotX, pivotY, pivotFromTip: P.pivotFromTip, pivotBelowKerf: P.pivotBelowKerf,
 
-    // Cam lever (lever-local coordinates unless noted)
-    leverPivot, handleLength, camCenter,
-    camRadius: P.camRadius, camEccentric: P.camEccentric, camMaxRadius,
-    camRise, camSwing: P.camSwing, camNoseOverhang, tongueFlex,
-    handleEndWidth: P.handleEndWidth,
-    heelTop, heelFoot, handleTaperStart,
+    // Cam lever (axis frame: origin at head center, x toward the nose)
+    headRadius: Rh, tailRadius: Rt, centerDistance, leverPivot,
+    handleEndWidth: 2 * Rt, handleDrop: P.handleDrop,
+    // Placement in the jaw (relative to the pivot) at rest
+    restTilt, restTiltDeg, headCenterRest, tailCenterRest,
+    restLift, contactLift, eccentricity, deadCenter, camSwing,
+    camRise, tongueFlex, noseOverhang,
     tongueSpan, clampForce,
 
     // Assembly
@@ -224,51 +252,69 @@ export function calculateClamp(params) {
 }
 
 /**
- * Height of the cam's contact point above the pivot when the lever has been
- * swung `deg` degrees from its rest position in the slot. The nose is a
- * circle of camRadius about a center camEccentric ahead of the pivot, so the
- * lift is camRadius + camEccentric·sin(deg): flush with the lever's top edge
- * at 0°, and at its maximum (dead center) at 90°.
+ * Height of the top of the cam head above the pivot when the handle has been
+ * swung `deg` degrees down from rest.
  * @param {object} d - result of calculateClamp
  * @param {number} deg - swing angle, 0 (released) .. camSwing (clamped)
  * @returns {number} inches above the pivot
  */
 export function camLift(d, deg) {
-  return d.camRadius + d.camEccentric * Math.sin(deg * Math.PI / 180);
+  const t = deg * Math.PI / 180;
+  const c = d.headCenterRest;
+  return d.headRadius + c.x * Math.sin(t) - c.y * Math.cos(t);
 }
 
 /**
  * How far the cam has pushed the tongue up at a given swing angle
- * (0 until the kerf has closed).
+ * (0 until the head reaches the tongue).
  * @param {object} d - result of calculateClamp
  * @param {number} deg
  * @returns {number} inches
  */
 export function tongueLift(d, deg) {
-  return Math.max(0, camLift(d, deg) - d.pivotBelowKerf - d.kerf);
+  return Math.max(0, camLift(d, deg) - d.contactLift);
 }
 
 /**
- * Outline of the cam lever in lever-local inches (origin at the back end of
- * the handle, top edge; x toward the nose, y down). Going clockwise from the
- * origin: straight top edge → cam nose arc (clockwise about camCenter, from
- * the top of the circle round past the tip) → the heel, tangent to the arc,
- * down to the bottom edge → one straight taper up to the narrow handle end
- * → back edge.
+ * Map a point from the lever's axis frame into jaw coordinates relative to
+ * the pivot, with the handle swung `deg` degrees down from rest.
  * @param {object} d - result of calculateClamp
- * @returns {{top: number[][], arc: object, heel: number[][], taper: number[][], back: number[][]}}
+ * @param {number[]} pt - [x, y] in the axis frame
+ * @param {number} [deg=0]
+ * @returns {number[]} [x, y] relative to the pivot, y down
+ */
+export function leverToJaw(d, [x, y], deg = 0) {
+  const b = d.restTilt;
+  // axis frame → rest pose (rotate by −β about the head center)
+  const rx = d.headCenterRest.x + x * Math.cos(b) + y * Math.sin(b);
+  const ry = d.headCenterRest.y - x * Math.sin(b) + y * Math.cos(b);
+  // swing about the pivot
+  const t = deg * Math.PI / 180;
+  return [rx * Math.cos(t) + ry * Math.sin(t), -rx * Math.sin(t) + ry * Math.cos(t)];
+}
+
+/**
+ * Outline of the cam lever in its axis frame (origin at the head center,
+ * x toward the nose, y down): the head arc, a straight edge tangent to both
+ * circles, the handle-end arc, and the other tangent edge.
+ * @param {object} d - result of calculateClamp
+ * @returns {object} tangent points and circle data
  */
 export function leverProfile(d) {
-  const c = d.camCenter;
-  const T = [d.heelTop.x, d.heelTop.y];
-  const B = [d.heelFoot.x, d.heelFoot.y];
-  const backBottom = [0, d.handleEndWidth];
+  const Rh = d.headRadius;
+  const Rt = d.tailRadius;
+  const D = d.centerDistance;
+  // Normals to the external tangents make angle γ with the head→tail line.
+  const g = Math.acos((Rh - Rt) / D);
+  const cg = Math.cos(g);
+  const sg = Math.sin(g);
   return {
-    top: [[0, 0], [c.x, 0]],
-    arc: { cx: c.x, cy: c.y, r: d.camRadius, from: [c.x, 0], to: T },
-    heel: [T, B],
-    taper: [B, backBottom],
-    back: [backBottom, [0, 0]]
+    head: { cx: 0, cy: 0, r: Rh },
+    tail: { cx: -D, cy: 0, r: Rt },
+    headUpper: [-Rh * cg, -Rh * sg],
+    headLower: [-Rh * cg, Rh * sg],
+    tailUpper: [-D - Rt * cg, -Rt * sg],
+    tailLower: [-D - Rt * cg, Rt * sg]
   };
 }
 

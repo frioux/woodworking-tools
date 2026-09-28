@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateClamp, validateClamp, clampWarnings, formatInches, PLAN,
-  camLift, tongueLift, leverProfile
+  camLift, tongueLift, leverProfile, leverToJaw
 } from '../cam-clamp/cam-clamp-math.js';
 
 // The original Fine Woodworking plan: 1/4" x 1" x 8-1/2" bar.
@@ -15,7 +15,7 @@ describe('calculateClamp — original plan', () => {
     expect(d.jawThickness).toBe(0.75);
     expect(d.fixedHeight).toBe(1.5);
     expect(d.leverLength).toBeCloseTo(4 + 5 / 16);
-    expect(d.leverWidth).toBe(1.25);
+    expect(d.leverWidth).toBe(1 + 1 / 8);
     expect(d.leverThickness).toBe(3 / 16);
   });
 
@@ -62,87 +62,108 @@ describe('calculateClamp — original plan', () => {
 
 describe('cam lever geometry', () => {
   const d = calculateClamp(original);
+  const toJaw = (pt, deg = 0) => leverToJaw(d, pt, deg);
 
-  it('pivot location agrees between the jaw and the lever', () => {
-    // Lever at rest: back end at the slot start, top edge on the kerf bottom.
-    expect(d.leverSlotStart + d.leverPivot.x).toBeCloseTo(d.pivotX);
-    expect(d.kerfBottom + d.leverPivot.y).toBeCloseTo(d.pivotY);
-    expect(d.leverPivot.x).toBeCloseTo(3 + 5 / 8);
+  it('the pivot hole maps onto the jaw pivot in every position', () => {
+    for (const deg of [0, 45, d.camSwing]) {
+      const [x, y] = toJaw([d.leverPivot.x, d.leverPivot.y], deg);
+      expect(x).toBeCloseTo(0);
+      expect(y).toBeCloseTo(0);
+    }
+    expect(d.leverPivot).toEqual({ x: -1 / 8, y: -1 / 16 });
   });
 
-  it('the nose is an eccentric arc that just overhangs the jaw tip at rest', () => {
-    expect(d.camCenter.x - d.leverPivot.x).toBeCloseTo(PLAN.camEccentric);
-    expect(d.camCenter.y).toBeCloseTo(d.leverPivot.y);
-    expect(d.camMaxRadius).toBeCloseTo(11 / 16);
-    expect(d.camNoseOverhang).toBeCloseTo(1 / 16);
-    expect(d.leverSlotStart + d.leverLength - d.jawLength).toBeCloseTo(d.camNoseOverhang);
-    // At rest the top of the arc is flush with the lever's top edge.
-    expect(d.camCenter.y - d.camRadius).toBeCloseTo(0);
+  it('the outline is smooth: straight edges tangent to both circles', () => {
+    const p = leverProfile(d);
+    for (const [ends, c1, c2] of [
+      [[p.headUpper, p.tailUpper], p.head, p.tail],
+      [[p.headLower, p.tailLower], p.head, p.tail]
+    ]) {
+      const [[x1, y1], [x2, y2]] = ends;
+      // each end lies on its circle ...
+      expect(Math.hypot(x1 - c1.cx, y1 - c1.cy)).toBeCloseTo(c1.r);
+      expect(Math.hypot(x2 - c2.cx, y2 - c2.cy)).toBeCloseTo(c2.r);
+      // ... and the edge is perpendicular to both radii (tangent, no corner)
+      const ex = x2 - x1;
+      const ey = y2 - y1;
+      expect(ex * (x1 - c1.cx) + ey * (y1 - c1.cy)).toBeCloseTo(0);
+      expect(ex * (x2 - c2.cx) + ey * (y2 - c2.cy)).toBeCloseTo(0);
+    }
+    expect(p.head.r).toBe(9 / 16);
+    expect(p.tail.r).toBe(5 / 16);
+    expect(d.handleEndWidth).toBe(5 / 8);
+    expect(d.centerDistance + d.headRadius + d.tailRadius).toBeCloseTo(d.leverLength);
   });
 
-  it('lifts 3/16 over 90°: the kerf closes first, then the tongue flexes 1/8', () => {
-    expect(camLift(d, 0)).toBeCloseTo(d.pivotBelowKerf);
-    expect(camLift(d, 90)).toBeCloseTo(d.pivotBelowKerf + d.camRise);
-    expect(d.camRise).toBeCloseTo(3 / 16);
+  it('at rest the handle hangs below the jaw and the head pokes past the tip', () => {
+    const [, ty] = toJaw([-d.centerDistance, 0]);
+    const bottomBelowPivot = d.slidingHeight - d.pivotY;
+    expect(ty + d.tailRadius - bottomBelowPivot).toBeCloseTo(3 / 16);
+    expect(d.noseOverhang).toBeGreaterThan(0);
+    expect(d.noseOverhang).toBeLessThan(1 / 8);
+    expect(d.restTiltDeg).toBeGreaterThan(0);
+  });
+
+  it('at rest the head clears the tongue, and the upper edge stays in the slot', () => {
+    expect(camLift(d, 0)).toBeCloseTo(d.restLift);
+    expect(d.restLift).toBeLessThan(d.contactLift);
     expect(tongueLift(d, 0)).toBe(0);
-    expect(tongueLift(d, 10)).toBe(0);              // still inside the kerf
-    expect(tongueLift(d, 90)).toBeCloseTo(1 / 8);
-    expect(d.tongueFlex).toBeCloseTo(1 / 8);
-    // Monotonic up to dead center, and dead center is the maximum.
+    const p = leverProfile(d);
+    const [, uy] = toJaw(p.tailUpper);
+    expect(-uy).toBeLessThan(d.pivotBelowKerf);
+  });
+
+  it('lifts smoothly to dead center and clamps just past it', () => {
     let prev = -1;
-    for (let a = 0; a <= 90; a += 5) {
+    for (let a = 0; a <= Math.floor(d.deadCenter); a += 5) {
       expect(camLift(d, a)).toBeGreaterThan(prev);
       prev = camLift(d, a);
     }
-    expect(camLift(d, 100)).toBeLessThan(camLift(d, 90));
+    expect(camLift(d, d.deadCenter)).toBeCloseTo(d.headRadius + d.eccentricity);
+    expect(d.camSwing).toBeGreaterThan(d.deadCenter);
+    expect(d.camSwing - d.deadCenter).toBeLessThan(10);
+    // Past dead center the lift falls a little, so the load holds the lever shut.
+    expect(camLift(d, d.camSwing)).toBeLessThan(camLift(d, d.deadCenter));
+    expect(d.tongueFlex).toBeCloseTo(tongueLift(d, d.camSwing));
+    expect(d.tongueFlex).toBeGreaterThan(1 / 10);
+    expect(d.tongueFlex).toBeLessThan(3 / 16);
+    expect(d.camRise).toBeCloseTo(d.headRadius + d.eccentricity - d.restLift);
   });
 
-  it('the nose never rises above the slot before the lever starts to swing', () => {
-    // Every outline point must be within camRadius+eccentric of the pivot and
-    // no point may sit above the top edge.
+  it('the head is the only part that rises into the tongue', () => {
+    // Swinging down, every point on the handle edges stays below the slot top
+    // except the head itself.
     const p = leverProfile(d);
-    for (const seg of [p.top, p.heel, p.taper, p.back]) {
-      for (const [x, y] of seg) {
-        expect(y).toBeGreaterThanOrEqual(-1e-9);
-        expect(y).toBeLessThanOrEqual(d.leverWidth + 1e-9);
-        expect(Math.hypot(x - d.leverPivot.x, y - d.leverPivot.y))
-          .toBeLessThanOrEqual(Math.hypot(d.leverPivot.x, d.leverWidth - d.leverPivot.y) + 1e-9);
+    for (let deg = 0; deg <= d.camSwing; deg += 5) {
+      for (const pt of [p.tailUpper, p.tailLower, [-d.centerDistance - d.tailRadius, 0]]) {
+        const [, y] = toJaw(pt, deg);
+        expect(-y).toBeLessThan(d.pivotBelowKerf);
       }
     }
   });
 
-  it('the heel is tangent to the nose arc and lands 9/16 behind the nose', () => {
-    expect(d.heelFoot.x).toBeCloseTo(d.leverLength - 9 / 16);
-    expect(d.heelFoot.y).toBe(d.leverWidth);
-    expect(Math.hypot(d.heelTop.x - d.camCenter.x, d.heelTop.y - d.camCenter.y)).toBeCloseTo(d.camRadius);
-    // Tangent: radius ⟂ heel line
-    const rx = d.heelTop.x - d.camCenter.x;
-    const ry = d.heelTop.y - d.camCenter.y;
-    const hx = d.heelFoot.x - d.heelTop.x;
-    const hy = d.heelFoot.y - d.heelTop.y;
-    expect(rx * hx + ry * hy).toBeCloseTo(0);
-    expect(d.heelTop.x).toBeGreaterThan(d.camCenter.x);  // on the nose side
-  });
-
-  it('the handle tapers from the heel to a 5/8 end', () => {
-    const p = leverProfile(d);
-    expect(p.taper[0]).toEqual([d.heelFoot.x, d.heelFoot.y]);
-    expect(p.taper[1]).toEqual([0, 5 / 8]);
-    expect(d.handleTaperStart).toBeCloseTo(3.75);
+  it('the slot holds the resting lever', () => {
+    const [tx] = toJaw([-d.centerDistance, 0]);
+    expect(d.leverSlotStart).toBeLessThan(d.pivotX + tx - d.tailRadius);
+    expect(d.leverSlotStart).toBeGreaterThan(d.slidingMortiseStart + d.slidingMortiseLength);
   });
 
   it('estimates a plausible clamping force for the original plan', () => {
     expect(d.tongueSpan).toBeCloseTo(d.tongueLength - d.pivotFromTip);
     expect(d.clampForce).toBeGreaterThan(40);
-    expect(d.clampForce).toBeLessThan(100);
+    expect(d.clampForce).toBeLessThan(120);
   });
 
-  it('keeps the cam geometry fixed and the handle growing with reach', () => {
-    const b = calculateClamp({ ...original, jawReach: 8 });
-    expect(b.camMaxRadius).toBe(d.camMaxRadius);
-    expect(b.camRise).toBe(d.camRise);
-    expect(b.handleLength - d.handleLength).toBeCloseTo(3.25);
-    expect(b.leverSlotStart + b.leverPivot.x).toBeCloseTo(b.pivotX);
+  it('keeps the head fixed and grows the handle with reach', () => {
+    for (const jawReach of [3, 8, 12]) {
+      const b = calculateClamp({ ...original, jawReach });
+      expect(b.headRadius).toBe(d.headRadius);
+      expect(b.centerDistance - d.centerDistance).toBeCloseTo(jawReach - original.jawReach);
+      expect(b.restLift).toBeLessThan(b.contactLift);
+      expect(b.camSwing).toBeGreaterThan(b.deadCenter);
+      const [, ty] = leverToJaw(b, [-b.centerDistance, 0]);
+      expect(ty + b.tailRadius - (b.slidingHeight - b.pivotY)).toBeCloseTo(3 / 16);
+    }
   });
 });
 

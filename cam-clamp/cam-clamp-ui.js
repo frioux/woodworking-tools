@@ -169,10 +169,11 @@ function renderCutList(d) {
 
   container.appendChild(heading('Cam Lever'));
   container.appendChild(definitionList([
-    ['Pivot hole', `${f(d.pinDiameter)} dia, ${f(d.camMaxRadius)} from nose, ${f(d.pivotBelowKerf)} from top edge`],
-    ['Cam nose', `R ${f(d.camRadius)}, center ${f(d.camEccentric)} ahead of the pivot`],
-    ['Cam rise', `${f(d.camRise)} over ${d.camSwing}° (closes the ${f(d.kerf)} kerf, then flexes the tongue ${f(d.tongueFlex)})`],
-    ['Handle', `tapers from ${f(d.leverWidth)} to ${f(d.handleEndWidth)} over ${f(d.handleTaperStart)}`]
+    ['Head', `R ${f(d.headRadius)}`],
+    ['Handle end', `R ${f(d.tailRadius)}, ${f(d.centerDistance)} center to center`],
+    ['Pivot hole', `${f(d.pinDiameter)} dia, ${f(-d.leverPivot.x)} behind and ${f(-d.leverPivot.y)} above the head center`],
+    ['Cam rise', `${f(d.camRise)}; clamped at ${d.camSwing}° (dead center ${Math.round(d.deadCenter)}°) it flexes the tongue ${f(d.tongueFlex)}`],
+    ['At rest', `handle hangs ${f(d.handleDrop)} below the jaw, head ${f(d.noseOverhang)} past the tip`]
   ]));
 
   const note = document.createElement('p');

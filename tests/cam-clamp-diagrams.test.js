@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
-import { calculateClamp, formatInches } from '../cam-clamp/cam-clamp-math.js';
+import { calculateClamp, formatInches, leverToJaw } from '../cam-clamp/cam-clamp-math.js';
 import {
   renderAssembly, renderFixedJaw, renderSlidingJaw, renderLever
 } from '../cam-clamp/cam-clamp-diagrams.js';
@@ -84,36 +84,39 @@ describe('jaw details', () => {
     expect(allText(svg)).toContain('7/16"');
   });
 
-  it('lever labels its length, width, pivot and cam', () => {
+  it('lever labels its length, width, radii and pivot', () => {
     const svg = renderLever(doc, dims, formatInches);
     const text = allText(svg);
     expect(text).toContain('4-5/16"');
-    expect(text).toContain('1-1/4"');
+    expect(text).toContain('1-1/8"');
     expect(text).toContain('5/8"');
-    expect(text).toContain('pivot 11/16" from nose');
-    expect(text).toContain('R 1/2"');
-    expect(text.some(t => /rise 3\/16"/.test(t))).toBe(true);
+    expect(text).toContain('R 9/16"');
+    expect(text).toContain('R 5/16"');
+    expect(text.some(t => /centers 3-7\/16"/.test(t))).toBe(true);
+    expect(text.some(t => /1\/8" behind and 1\/16" above/.test(t))).toBe(true);
     expect(svg.querySelector('[data-testid="pivot-hole"]')).toBeTruthy();
     expect(svg.querySelector('[data-testid="cam-circle"]')).toBeTruthy();
+    expect(svg.querySelector('[data-testid="tail-circle"]')).toBeTruthy();
   });
 });
 
 describe('cam lever drawing', () => {
-  it('lever outline is an arc-and-taper path, not a rectangle', () => {
+  it('lever outline is two arcs joined by straight tangent edges', () => {
     const svg = renderLever(doc, dims, formatInches);
-    const path = svg.querySelector('[data-testid="lever"] path');
-    const dAttr = path.getAttribute('d');
-    expect(dAttr).toMatch(/A 8 8 0 0 1/);      // R 1/2" at 16 units per inch
-    expect(dAttr.match(/L /g).length).toBeGreaterThanOrEqual(3);
+    const dAttr = svg.querySelector('[data-testid="lever"] path').getAttribute('d');
+    expect(dAttr).toMatch(/A 9 9 0 1 1/);     // R 9/16" head at 16 units per inch
+    expect(dAttr).toMatch(/A 5 5 0 0 1/);     // R 5/16" handle end
+    expect(dAttr.match(/L /g).length).toBe(1);
+    expect(dAttr.trim().endsWith('Z')).toBe(true);
   });
 
-  it('the cam circle center sits 3/16" ahead of the pivot hole', () => {
+  it('the pivot hole sits 1/8" behind and 1/16" above the head center', () => {
     const svg = renderLever(doc, dims, formatInches);
     const hole = svg.querySelector('[data-testid="pivot-hole"]');
     const cam = svg.querySelector('[data-testid="cam-circle"]');
-    expect(Number(cam.getAttribute('cx')) - Number(hole.getAttribute('cx'))).toBeCloseTo(3);
-    expect(Number(cam.getAttribute('cy'))).toBeCloseTo(Number(hole.getAttribute('cy')));
-    expect(Number(cam.getAttribute('r'))).toBeCloseTo(8);
+    expect(Number(cam.getAttribute('cx')) - Number(hole.getAttribute('cx'))).toBeCloseTo(2);
+    expect(Number(cam.getAttribute('cy')) - Number(hole.getAttribute('cy'))).toBeCloseTo(1);
+    expect(Number(cam.getAttribute('r'))).toBeCloseTo(9);
   });
 
   it('sliding jaw and assembly show the lever at rest and a swung ghost', () => {
@@ -124,7 +127,7 @@ describe('cam lever drawing', () => {
       expect(rest).toBeTruthy();
       expect(swung).toBeTruthy();
       expect(rest.getAttribute('transform')).toContain('rotate(0)');
-      expect(swung.getAttribute('transform')).toContain('rotate(-90)');
+      expect(swung.getAttribute('transform')).toContain(`rotate(${-dims.camSwing})`);
       // Both rotate about the jaw's pivot point
       const pivot = `translate(${dims.pivotX * 16}, ${dims.pivotY * 16})`;
       expect(rest.getAttribute('transform')).toContain(pivot);
@@ -136,14 +139,17 @@ describe('cam lever drawing', () => {
     const text = allText(renderSlidingJaw(doc, dims, formatInches));
     expect(text).toContain('5/8"');
     expect(text).toContain('1/2"');
-    expect(text.some(t => /clamped: handle down 90°/.test(t))).toBe(true);
+    expect(text.some(t => new RegExp(`handle down ${dims.camSwing}°`).test(t))).toBe(true);
   });
 
   it('assembly leaves room below the jaw for the swung handle', () => {
     const svg = renderAssembly(doc, dims, formatInches);
-    const [, y, , h] = svg.getAttribute('viewBox').split(' ').map(Number);
-    const bottom = y + h;
-    const hang = (dims.barLength - dims.slidingHeight + dims.pivotY + dims.handleLength) * 16;
-    expect(bottom).toBeGreaterThan(hang);
+    const [x, y, w, h] = svg.getAttribute('viewBox').split(' ').map(Number);
+    const slideTop = dims.barLength - dims.slidingHeight;
+    for (const deg of [0, dims.camSwing]) {
+      const [tx, ty] = leverToJaw(dims, [-dims.centerDistance, 0], deg);
+      expect(y + h).toBeGreaterThan((slideTop + dims.pivotY + ty + dims.tailRadius) * 16);
+      expect(x + w).toBeGreaterThan((dims.slidingOffset + dims.pivotX + tx + dims.tailRadius) * 16);
+    }
   });
 });

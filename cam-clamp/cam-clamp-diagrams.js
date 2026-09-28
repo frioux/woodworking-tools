@@ -7,7 +7,7 @@
  * origin at the back (bar) end, top edge.
  */
 
-import { leverProfile } from './cam-clamp-math.js';
+import { leverProfile, leverToJaw } from './cam-clamp-math.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -194,17 +194,18 @@ function fixedJawSide(doc, d, { showBar = true } = {}) {
 }
 
 /**
- * Lever outline (eccentric cam nose, 45° heel, tapered handle), origin at
- * the back-top corner of the blank, in SVG units.
+ * Lever outline — round cam head, tangent edges, round handle end — in the
+ * lever's axis frame (origin at the head center, x toward the nose), SVG units.
  */
 function leverShape(doc, d, { opacity = 0.85, dash } = {}) {
   const s = SCALE;
   const p = leverProfile(d);
   const P = ([x, y]) => `${x * s} ${y * s}`;
-  const r = p.arc.r * s;
+  const rh = p.head.r * s;
+  const rt = p.tail.r * s;
   const attrs = {
-    d: `M ${P(p.top[0])} L ${P(p.top[1])} A ${r} ${r} 0 0 1 ${P(p.arc.to)} ` +
-       `L ${P(p.heel[1])} L ${P(p.taper[1])} Z`,
+    d: `M ${P(p.headUpper)} A ${rh} ${rh} 0 1 1 ${P(p.headLower)} ` +
+       `L ${P(p.tailLower)} A ${rt} ${rt} 0 0 1 ${P(p.tailUpper)} Z`,
     fill: COLORS.lever, stroke: COLORS.leverDark, 'stroke-width': 0.5,
     'stroke-linejoin': 'round', 'fill-opacity': opacity
   };
@@ -216,15 +217,15 @@ function leverShape(doc, d, { opacity = 0.85, dash } = {}) {
 
 /**
  * The lever placed in jaw coordinates, swung `deg` degrees down from its rest
- * position about the pivot. Swinging the handle down rotates the nose up.
+ * position about the pivot. Swinging the handle down rolls the head up.
  */
 function leverInJaw(doc, d, deg, opts = {}) {
   const s = SCALE;
-  const lp = d.leverPivot;
+  const c = d.headCenterRest;
   const g = svgEl(doc, 'g', {
     'data-testid': opts.testid || 'lever',
     transform: `translate(${d.pivotX * s}, ${d.pivotY * s}) rotate(${-deg}) ` +
-               `translate(${-lp.x * s}, ${-lp.y * s})`
+               `translate(${c.x * s}, ${c.y * s}) rotate(${-d.restTiltDeg})`
   });
   g.appendChild(leverShape(doc, d, opts));
   return g;
@@ -257,15 +258,20 @@ function swingArrow(doc, cx, cy, r, a1, a2, color) {
 }
 
 /**
- * How far below the sliding jaw's top the swung (clamped) lever hangs, in
- * inches, plus how far past the jaw tip it reaches.
+ * Extent of the lever (at rest and swung to the clamped stop) in jaw
+ * coordinates, inches from the sliding jaw's top-left corner.
  */
-function swungLeverExtent(d) {
-  return {
-    bottom: d.pivotY + d.handleLength,
-    right: d.pivotX + Math.max(d.leverWidth - d.pivotBelowKerf, d.camRadius),
-    left: d.pivotX - d.pivotBelowKerf
-  };
+function leverExtent(d) {
+  let bottom = 0;
+  let right = 0;
+  for (const deg of [0, d.camSwing]) {
+    for (const [cx, r] of [[0, d.headRadius], [-d.centerDistance, d.tailRadius]]) {
+      const [x, y] = leverToJaw(d, [cx, 0], deg);
+      bottom = Math.max(bottom, d.pivotY + y + r);
+      right = Math.max(right, d.pivotX + x + r);
+    }
+  }
+  return { bottom, right };
 }
 
 /**
@@ -333,8 +339,10 @@ function slidingJawSide(doc, d, { showLever = true, showBar = true, showSwing = 
     // Handle swings down (arc about the pivot); tongue is pushed up.
     const px = d.pivotX * s;
     const py = d.pivotY * s;
-    const swingR = (d.handleLength * 0.55) * s;
-    g.appendChild(swingArrow(doc, px, py, swingR, 180 - 18, 180 - d.camSwing + 22, COLORS.motion));
+    const swingR = (d.centerDistance * 0.6) * s;
+    const handleAt = 180 - d.restTiltDeg;   // SVG angle of the handle at rest
+    g.appendChild(swingArrow(doc, px, py, swingR, handleAt - 12, handleAt - d.camSwing + 15,
+      COLORS.motion));
     const ax = (d.padStart + d.padLength * 0.3) * s;
     const ay = -d.padThickness * s - 3;
     g.appendChild(line(doc, ax, ay, ax, ay - 7, COLORS.motion, 1.2));
@@ -381,11 +389,11 @@ export function renderAssembly(doc, d, fmt) {
   const J = d.jawLength * s;
   const L = d.barLength * s;
   const padL = 26;
-  const padR = 26;
+  const padR = Math.max(26, (d.slidingOffset + leverExtent(d).right - d.jawLength) * SCALE + 6);
   const padT = 18;
   // Leave room for the ghosted lever hanging below the sliding jaw.
   const slideTop = (d.barLength - d.slidingHeight) * s;
-  const padB = Math.max(10, slideTop + swungLeverExtent(d).bottom * s + 8 - L);
+  const padB = Math.max(10, slideTop + leverExtent(d).bottom * s + 8 - L);
   const svg = svgRoot(doc, -padL, -padT, J + padL + padR, L + padT + padB, 'clamp-assembly');
 
   // Bar
@@ -482,12 +490,14 @@ export function renderSlidingJaw(doc, d, fmt) {
   const H = d.slidingHeight * s;
   const T = d.jawThickness * s;
   const padL = 22;
-  const padR = 24;
   const padT = 28 + d.padThickness * s;
   const gap = 30;
   // The ghosted, swung lever hangs below the jaw; put the plan view under it.
-  const swung = swungLeverExtent(d);
-  const planY = Math.max(H + gap, swung.bottom * s + 22);
+  const swung = leverExtent(d);
+  const padR = Math.max(24, (swung.right - d.jawLength) * s + 6);
+  // Note about the clamped lever sits under the dimensions and the handle.
+  const noteY = Math.max(H + 22, swung.bottom * s + 7);
+  const planY = Math.max(H + gap, swung.bottom * s + 22, noteY + 14);
   const total = planY + T + 20;
 
   const svg = svgRoot(doc, -padL, -padT, J + padL + padR, total + padT, 'clamp-sliding-jaw');
@@ -505,9 +515,8 @@ export function renderSlidingJaw(doc, d, fmt) {
   svg.appendChild(hDimension(doc, 0, d.reliefX * s, H, fmt(d.reliefX), false, 7));
   svg.appendChild(hDimension(doc, d.pivotX * s, J, topY, fmt(d.pivotFromTip), true, 6));
   // Lever position labels
-  const swungBottomY = swung.bottom * s;
-  svg.appendChild(label(doc, (d.pivotX - d.pivotBelowKerf) * s - 3, swungBottomY - 2,
-    `clamped: handle down ${d.camSwing}°, cam lifts tongue ${fmt(d.tongueFlex)}`, 'end'));
+  svg.appendChild(label(doc, 0, noteY,
+    `clamped (dashed): handle down ${d.camSwing}°, cam lifts tongue ${fmt(d.tongueFlex)}`, 'start'));
 
   // --- Bottom (plan) view ---
   const plan = jawPlan(doc, d, {
@@ -531,43 +540,52 @@ export function renderSlidingJaw(doc, d, fmt) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Cam lever layout: the blank with its cam nose, pivot hole, the arc's
- * construction (center and radius) and the handle taper.
+ * Cam lever layout: a round head and round handle end joined by tangent
+ * lines, with both construction circles, the off-center pivot hole and the
+ * layout dimensions. Drawn with the centerline horizontal.
  */
 export function renderLever(doc, d, fmt) {
   const s = SCALE;
   const L = d.leverLength * s;
   const W = d.leverWidth * s;
+  const Rh = d.headRadius * s;
+  const Rt = d.tailRadius * s;
+  const D = d.centerDistance * s;
   const padL = 26;
-  const padT = 18;
-  const padB = 37;
+  const padT = 22;
+  const padB = 44;
   // Match the jaw drawings' width so text renders at the same size.
-  const vbW = Math.max(L + padL + 30, d.jawLength * s + 36);
+  const vbW = Math.max(L + padL + 34, d.jawLength * s + 40);
   const svg = svgRoot(doc, -padL, -padT, vbW, W + padT + padB, 'clamp-lever');
 
-  const p = leverProfile(d);
-  const px = d.leverPivot.x * s;
-  const py = d.leverPivot.y * s;
-  const cx = d.camCenter.x * s;
-  const cy = d.camCenter.y * s;
-  const R = d.camRadius * s;
+  // Head center, in the drawing's coordinates (blank's back-top corner = 0,0)
+  const hx = L - Rh;
+  const hy = Rh;
+  const tx = hx - D;
+  const px = hx + d.leverPivot.x * s;
+  const py = hy + d.leverPivot.y * s;
 
   // Blank outline (dashed) so the shape reads as cut from a rectangle.
   svg.appendChild(rect(doc, 0, 0, L, W, 'none', COLORS.dimLine, 0.3, '1.2 1.2'));
 
   const g = svgEl(doc, 'g', { 'data-testid': 'lever' });
-  g.appendChild(leverShape(doc, d, { opacity: 1 }));
-  // Cam construction: full nose circle and its center, with a radius line.
-  g.appendChild(svgEl(doc, 'circle', {
-    'data-testid': 'cam-circle', cx, cy, r: R,
-    fill: 'none', stroke: COLORS.leverDark, 'stroke-width': 0.3, 'stroke-dasharray': '1.2 1.2'
-  }));
-  g.appendChild(line(doc, cx - 2, cy, cx + 2, cy, COLORS.leverDark, 0.4));
-  g.appendChild(line(doc, cx, cy - 2, cx, cy + 2, COLORS.leverDark, 0.4));
-  const ra = -40 * Math.PI / 180;
-  const rx = cx + R * Math.cos(ra);
-  const ry = cy + R * Math.sin(ra);
-  g.appendChild(line(doc, cx, cy, rx, ry, COLORS.dimLine, 0.35));
+  const shape = svgEl(doc, 'g', { transform: `translate(${hx}, ${hy})` });
+  shape.appendChild(leverShape(doc, d, { opacity: 1 }));
+  g.appendChild(shape);
+
+  // Construction: both circles, their centers and the centerline.
+  const construction = (cx, r, testid) => {
+    g.appendChild(svgEl(doc, 'circle', {
+      'data-testid': testid, cx, cy: hy, r,
+      fill: 'none', stroke: COLORS.leverDark, 'stroke-width': 0.3, 'stroke-dasharray': '1.2 1.2'
+    }));
+    g.appendChild(line(doc, cx - 2, hy, cx + 2, hy, COLORS.leverDark, 0.4));
+    g.appendChild(line(doc, cx, hy - 2, cx, hy + 2, COLORS.leverDark, 0.4));
+  };
+  construction(hx, Rh, 'cam-circle');
+  construction(tx, Rt, 'tail-circle');
+  g.appendChild(line(doc, tx, hy, hx, hy, COLORS.leverDark, 0.25, '3 1 0.6 1'));
+
   // Pivot hole with centerlines.
   g.appendChild(svgEl(doc, 'circle', {
     'data-testid': 'pivot-hole', cx: px, cy: py, r: d.pinDiameter / 2 * s,
@@ -577,25 +595,38 @@ export function renderLever(doc, d, fmt) {
   g.appendChild(line(doc, px, py - 3, px, py + 3, COLORS.leverDark, 0.3));
   svg.appendChild(g);
 
+  // Radius callouts
+  const callout = (cx, r, angleDeg, text, lx, ly) => {
+    const a = angleDeg * Math.PI / 180;
+    const ex = cx + r * Math.cos(a);
+    const ey = hy + r * Math.sin(a);
+    svg.appendChild(line(doc, cx, hy, ex, ey, COLORS.dimLine, 0.35));
+    svg.appendChild(line(doc, ex, ey, lx, ly, COLORS.dimLine, 0.35));
+    const t = label(doc, lx + (lx > ex ? 1 : -1), ly + 1.2, text, lx > ex ? 'start' : 'end', 3.4);
+    t.setAttribute('font-style', 'normal');
+    svg.appendChild(t);
+  };
+  callout(hx, Rh, 40, `R ${fmt(d.headRadius)}`, L + 4, hy + Rh + 4);
+  callout(tx, Rt, 220, `R ${fmt(d.tailRadius)}`, tx - Rt - 4, hy - Rt - 6);
+
   // Layout dimensions
   svg.appendChild(hDimension(doc, 0, L, W, fmt(d.leverLength), false));
-  svg.appendChild(hDimension(doc, px, L, W, fmt(d.camMaxRadius), false, 17));
-  svg.appendChild(hDimension(doc, 0, p.taper[0][0] * s, W, `taper ${fmt(p.taper[0][0])}`, false, 17));
+  svg.appendChild(hDimension(doc, tx, hx, W, `centers ${fmt(d.centerDistance)}`, false, 17));
   svg.appendChild(vDimension(doc, 0, W, 0, fmt(d.leverWidth), true, 16));
-  svg.appendChild(vDimension(doc, 0, d.handleEndWidth * s, 0, fmt(d.handleEndWidth), true, 7));
-  svg.appendChild(hDimension(doc, px, L, 0, `pivot ${fmt(d.camMaxRadius)} from nose`, true));
-  svg.appendChild(vDimension(doc, 0, py, L, fmt(d.pivotBelowKerf), false, 14));
+  svg.appendChild(vDimension(doc, hy - Rt, hy + Rt, 0, fmt(d.handleEndWidth), true, 7));
+  // Pivot hole leader (its small offsets from the head center are in the note)
+  svg.appendChild(line(doc, px, py, px - 8, -8, COLORS.dimLine, 0.35));
+  const ph = label(doc, px - 9, -9, `${fmt(d.pinDiameter)} pivot hole`, 'end', 3.4);
+  ph.setAttribute('font-style', 'normal');
+  svg.appendChild(ph);
 
-  // Cam callouts
-  svg.appendChild(line(doc, rx, ry, L + 2, ry - 3, COLORS.dimLine, 0.35));
-  const t1 = label(doc, L + 3, ry - 2, `R ${fmt(d.camRadius)}`, 'start', 3.4);
-  t1.setAttribute('font-style', 'normal');
-  svg.appendChild(t1);
   const noteX = vbW / 2 - padL;
-  svg.appendChild(label(doc, noteX, W + 28,
-    `cam: R ${fmt(d.camRadius)} arc about a center ${fmt(d.camEccentric)} ahead of the pivot`, 'middle'));
-  svg.appendChild(label(doc, noteX, W + 33,
-    `rise ${fmt(d.camRise)} over ${d.camSwing}°: closes the ${fmt(d.kerf)} kerf, then flexes the tongue ${fmt(d.tongueFlex)}`, 'middle'));
+  svg.appendChild(label(doc, noteX, W + 30,
+    `pivot ${fmt(-d.leverPivot.x)} behind and ${fmt(-d.leverPivot.y)} above the head's center makes the head a cam`,
+    'middle'));
+  svg.appendChild(label(doc, noteX, W + 36,
+    `rise ${fmt(d.camRise)}; handle down ${d.camSwing}° (just past dead center) ` +
+    `flexes the tongue ${fmt(d.tongueFlex)} and locks`, 'middle'));
 
   return svg;
 }

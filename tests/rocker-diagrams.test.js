@@ -97,6 +97,36 @@ describe('renderChairProfile', () => {
     expect(parseFloat(circle.getAttribute('cy'))).toBeCloseTo(-42 * 4, 5);
   });
 
+  it('draws a dotted centreline from the rocker to the seat, labelled ℄', () => {
+    const g = renderChairProfile(doc, model, 0);
+    const cl = g.querySelector('[data-testid="centerline"]');
+    expect(cl).toBeTruthy();
+    const ln = cl.querySelector('line');
+    expect(ln.getAttribute('stroke-dasharray')).toBeTruthy();
+    // At θ = 0 the centreline is vertical at x = 0, from the floor (arc
+    // bottom) up to the seat.
+    expect(parseFloat(ln.getAttribute('x1'))).toBeCloseTo(0, 5);
+    expect(parseFloat(ln.getAttribute('x2'))).toBeCloseTo(0, 5);
+    const ys = [parseFloat(ln.getAttribute('y1')), parseFloat(ln.getAttribute('y2'))].sort((a, b) => a - b);
+    expect(ys[1]).toBeCloseTo(0, 5);                        // rocker surface / floor
+    expect(ys[0]).toBeCloseTo(-defaults.seatHeight * 4, 5); // seat
+    expect(cl.querySelector('text').textContent).toBe('\u2104');
+  });
+
+  it('rotates the centreline with the chair', () => {
+    // Positive θ rocks the chair forward (the rolling body rotates
+    // clockwise), so the seat end of the centreline lies ahead of the
+    // rocker end; negative θ rocks it back and the seat end lies aft.
+    const ends = (theta) => {
+      const ln = renderChairProfile(doc, model, theta).querySelector('[data-testid="centerline"] line');
+      return [parseFloat(ln.getAttribute('x1')), parseFloat(ln.getAttribute('x2'))]; // [rocker, seat]
+    };
+    const [fwdBot, fwdTop] = ends(0.2);
+    expect(fwdTop).toBeGreaterThan(fwdBot + 1);
+    const [backBot, backTop] = ends(-0.2);
+    expect(backTop).toBeLessThan(backBot - 1);
+  });
+
   it('contains line elements for legs, seat, backrest, and stick figure', () => {
     const g = renderChairProfile(doc, model, 0);
     const lines = g.querySelectorAll('line');

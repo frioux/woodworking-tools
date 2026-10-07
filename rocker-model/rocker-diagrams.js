@@ -535,6 +535,33 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     seatWorld[1][0] * s, -seatWorld[1][1] * s,
     COLOR_SEAT, 3));
 
+  // --- Chair centreline (℄) ---
+  // Dotted line midway between the legs, from the rocker surface up to
+  // the seat.  It rotates with the chair, so at rest it coincides with
+  // the plumb radius line and diverges from it as the chair rocks.
+  const clLocalBotY = -radius;      // rocker surface at local x = 0
+  const clLocalTopY = legTopLocalY; // seat
+  const [clBotX, clBotY] = localToWorld(0, clLocalBotY, arcCenterX, arcCenterY, theta);
+  const [clTopX, clTopY] = localToWorld(0, clLocalTopY, arcCenterX, arcCenterY, theta);
+  const cl = svgEl(doc, "g", { "data-testid": "centerline" });
+  const clLine = line(doc, clBotX * s, -clBotY * s, clTopX * s, -clTopY * s,
+    COLOR_LEGS, 1, "1.5 3");
+  clLine.setAttribute("stroke-linecap", "round");
+  cl.appendChild(clLine);
+  // Label beside the line, midway up, in the clear space between the legs
+  const [clMidX, clMidY] = localToWorld(0, (clLocalBotY + clLocalTopY) / 2,
+                                        arcCenterX, arcCenterY, theta);
+  const clLabel = svgEl(doc, "text", {
+    x: clMidX * s + 5,
+    y: -clMidY * s + 4,
+    "font-size": 12,
+    fill: COLOR_LEGS,
+    "font-family": "sans-serif",
+  });
+  clLabel.textContent = "\u2104"; // ℄ centre line symbol
+  cl.appendChild(clLabel);
+  g.appendChild(cl);
+
   // --- Backrest (straight line from rear seat edge) ---
   // Scale backrest height to the sitter's torso + head so the figure
   // doesn't project past the end of the backrest.

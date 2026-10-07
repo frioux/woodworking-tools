@@ -51,6 +51,21 @@ describe('renderChairProfile', () => {
     expect(cogText).toBeTruthy();
   });
 
+  it('marks the rocker radius centre directly above the contact point', () => {
+    const theta = 0.2;
+    const g = renderChairProfile(doc, model, theta);
+    const rc = g.querySelector('[data-testid="radius-center"]');
+    expect(rc).toBeTruthy();
+    const label = Array.from(rc.querySelectorAll('text')).find(t => /radius center/i.test(t.textContent));
+    expect(label).toBeTruthy();
+    expect(label.textContent).toContain('R = 42 in');
+
+    // The centre marker circle sits at (R·θ, R) in world inches → SVG (x·4, −y·4)
+    const circle = rc.querySelector('circle');
+    expect(parseFloat(circle.getAttribute('cx'))).toBeCloseTo(42 * theta * 4, 5);
+    expect(parseFloat(circle.getAttribute('cy'))).toBeCloseTo(-42 * 4, 5);
+  });
+
   it('contains line elements for legs, seat, backrest, and stick figure', () => {
     const g = renderChairProfile(doc, model, 0);
     const lines = g.querySelectorAll('line');

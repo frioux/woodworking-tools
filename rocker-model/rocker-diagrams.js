@@ -373,6 +373,38 @@ export function renderChairProfile(doc, model, theta) {
   const tickLen = 1.5 * s;
   g.appendChild(line(doc, contactX * s, 0, contactX * s, -tickLen, COLOR_FLOOR, 1.5));
 
+  // --- Rocker radius centre ---
+  // The centre of the arc the rockers are cut to.  For a circle rolling
+  // on a flat floor it always sits directly above the contact point at
+  // height R, so the dashed radius line is the chair's current "plumb"
+  // reference — an important part of drafting the curve against the seat.
+  const rc = svgEl(doc, "g", { "data-testid": "radius-center" });
+  rc.appendChild(line(doc, arcCenterX * s, -arcCenterY * s, contactX * s, 0,
+    COLOR_ROCKER, 1, "6 4"));
+  const crossLen = 2 * s;
+  rc.appendChild(line(doc, (arcCenterX * s) - crossLen, -arcCenterY * s,
+    (arcCenterX * s) + crossLen, -arcCenterY * s, COLOR_ROCKER, 1.5));
+  rc.appendChild(line(doc, arcCenterX * s, (-arcCenterY * s) - crossLen,
+    arcCenterX * s, (-arcCenterY * s) + crossLen, COLOR_ROCKER, 1.5));
+  rc.appendChild(svgEl(doc, "circle", {
+    cx: arcCenterX * s,
+    cy: -arcCenterY * s,
+    r: 4,
+    fill: "none",
+    stroke: COLOR_ROCKER,
+    "stroke-width": 1.5,
+  }));
+  const rcLabel = svgEl(doc, "text", {
+    x: arcCenterX * s + 10,
+    y: -arcCenterY * s - 6,
+    "font-size": 10,
+    fill: COLOR_ROCKER,
+    "font-family": "sans-serif",
+  });
+  rcLabel.textContent = `Rocker radius center (R = ${radius} in)`;
+  rc.appendChild(rcLabel);
+  g.appendChild(rc);
+
   // --- Legs ---
   // Two legs from the rocker arc up to the seat.
   // In local (chair) frame: front leg at +seatDepth/2, back leg at -seatDepth/2

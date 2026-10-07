@@ -87,9 +87,9 @@ describe('renderChairProfile', () => {
     const g = renderChairProfile(doc, model, theta);
     const rc = g.querySelector('[data-testid="radius-center"]');
     expect(rc).toBeTruthy();
-    const label = Array.from(rc.querySelectorAll('text')).find(t => /radius center/i.test(t.textContent));
-    expect(label).toBeTruthy();
-    expect(label.textContent).toContain('R = 42 in');
+    const texts = Array.from(rc.querySelectorAll('text')).map(t => t.textContent);
+    expect(texts.some(t => /radius center/i.test(t))).toBe(true);
+    expect(texts).toContain('R = 42 in');
 
     // The centre marker circle sits at (R·θ, R) in world inches → SVG (x·4, −y·4)
     const circle = rc.querySelector('circle');

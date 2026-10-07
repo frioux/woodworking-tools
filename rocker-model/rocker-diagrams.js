@@ -470,22 +470,25 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     stroke: COLOR_ROCKER,
     "stroke-width": 1.5,
   }));
-  const rcLabel = svgEl(doc, "text", {
+  // Two short lines plus a hint so the label stays inside the fixed
+  // frame while the chair rocks fore and aft.
+  const rcTextAttrs = {
     x: arcCenterX * s + 10,
-    y: -arcCenterY * s - 6,
     "font-size": 10,
     fill: COLOR_ROCKER,
     "font-family": "sans-serif",
-  });
-  rcLabel.textContent = `Rocker radius center (R = ${radius} in)`;
+  };
+  const rcLabel = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s - 8 });
+  rcLabel.textContent = "Rocker radius center";
   rc.appendChild(rcLabel);
+  const rcValue = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s + 4 });
+  rcValue.textContent = `R = ${radius} in`;
+  rc.appendChild(rcValue);
   const rcHint = svgEl(doc, "text", {
-    x: arcCenterX * s + 10,
-    y: -arcCenterY * s + 6,
+    ...rcTextAttrs,
+    y: -arcCenterY * s + 15,
     "font-size": 8,
-    fill: COLOR_ROCKER,
     opacity: 0.65,
-    "font-family": "sans-serif",
   });
   rcHint.textContent = showDetails ? "tap to hide details" : "tap for details";
   rc.appendChild(rcHint);
@@ -626,9 +629,11 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     cog.appendChild(cogLabel);
     g.appendChild(cog);
     if (labelGap < 6 && cogY > arcCenterY) {
+      // CoG label is just above the centre: push the centre's text down
       rcLabel.setAttribute("y", -arcCenterY * s + 14);
-      rcHint.setAttribute("y", -arcCenterY * s + 24);
-  }
+      rcValue.setAttribute("y", -arcCenterY * s + 26);
+      rcHint.setAttribute("y", -arcCenterY * s + 37);
+    }
   }
 
   // --- Contact point marker ---

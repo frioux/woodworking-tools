@@ -656,16 +656,6 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     r: 3,
     fill: COLOR_LEGS,
   }));
-  const contactLabel = svgEl(doc, "text", {
-    x: contactX * s,
-    y: 14,
-    "font-size": 10,
-    fill: COLOR_LEGS,
-    "font-family": "sans-serif",
-    "text-anchor": "middle",
-  });
-  contactLabel.textContent = "Rocker contact point";
-  contact.appendChild(contactLabel);
   g.appendChild(contact);
 
   return g;

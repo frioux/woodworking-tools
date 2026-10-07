@@ -61,15 +61,15 @@ describe('renderChairProfile', () => {
     expect(cogText).toBeTruthy();
   });
 
-  it('labels the rocker contact point on the floor', () => {
+  it('marks the rocker contact point on the floor without a label', () => {
     const g = renderChairProfile(doc, model, 0.1);
     const contact = g.querySelector('[data-testid="contact-point"]');
     expect(contact).toBeTruthy();
-    const label = contact.querySelector('text');
-    expect(label.textContent).toBe('Rocker contact point');
-    // Centred on the contact point, which is at x = R·θ (world inches)
-    expect(parseFloat(label.getAttribute('x'))).toBeCloseTo(42 * 0.1 * 4, 5);
-    expect(parseFloat(contact.querySelector('circle').getAttribute('cy'))).toBe(0);
+    expect(contact.querySelector('text')).toBeNull();
+    // The dot sits on the floor at x = R·θ (world inches)
+    const dot = contact.querySelector('circle');
+    expect(parseFloat(dot.getAttribute('cx'))).toBeCloseTo(42 * 0.1 * 4, 5);
+    expect(parseFloat(dot.getAttribute('cy'))).toBe(0);
   });
 
   it('drops a plumb line from the centre of gravity to the floor', () => {

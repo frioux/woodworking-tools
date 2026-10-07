@@ -211,6 +211,58 @@ describe('renderChairProfile', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Posture poses                                                     */
+/* ------------------------------------------------------------------ */
+describe('posture poses', () => {
+  const attr = (posture, selector, name) => {
+    const m = buildRockerModel({ ...defaults, posture });
+    const g = renderChairProfile(doc, m, 0);
+    return parseFloat(g.querySelector(selector).getAttribute(name));
+  };
+
+  it('legs forward swings the feet forward', () => {
+    const neutralFoot = attr('neutral', '[data-testid="stick-lower-leg"]', 'x2');
+    const forwardFoot = attr('legsForward', '[data-testid="stick-lower-leg"]', 'x2');
+    expect(forwardFoot).toBeGreaterThan(neutralFoot + 4 * 4); // > 4 inches
+  });
+
+  it('leaning forward tips the head forward of the neutral position', () => {
+    const neutralHead = attr('neutral', '[data-testid="stick-head"]', 'cx');
+    const forwardHead = attr('leaningForward', '[data-testid="stick-head"]', 'cx');
+    expect(forwardHead).toBeGreaterThan(neutralHead + 4 * 4);
+  });
+
+  it('arms back puts the hands behind the shoulders', () => {
+    const shoulderX = attr('armsBack', '[data-testid="stick-upper-arm"]', 'x1');
+    const handX = attr('armsBack', '[data-testid="stick-forearm"]', 'x2');
+    const neutralHandX = attr('neutral', '[data-testid="stick-forearm"]', 'x2');
+    expect(handX).toBeLessThan(shoulderX);
+    expect(neutralHandX).toBeGreaterThan(shoulderX);
+  });
+
+  it('reclined slides the hips and knees forward', () => {
+    const neutralKnee = attr('neutral', '[data-testid="stick-lower-leg"]', 'x1');
+    const reclinedKnee = attr('reclined', '[data-testid="stick-lower-leg"]', 'x1');
+    expect(reclinedKnee).toBeCloseTo(neutralKnee + 3 * 4, 5);
+  });
+
+  it('reclined still keeps the head in front of the backrest', () => {
+    const m = buildRockerModel({ ...defaults, posture: 'reclined', backrestAngle: 90 });
+    const g = renderChairProfile(doc, m, 0);
+    const head = g.querySelector('[data-testid="stick-head"]');
+    const cx = parseFloat(head.getAttribute('cx'));
+    const r = parseFloat(head.getAttribute('r'));
+    expect(cx - r).toBeGreaterThanOrEqual(-(defaults.seatDepth / 2) * 4 - 0.1);
+  });
+
+  it('unknown or custom postures draw the neutral pose', () => {
+    const neutral = renderChairProfile(doc, buildRockerModel({ ...defaults, posture: 'neutral' }), 0);
+    const custom = renderChairProfile(doc, buildRockerModel({ ...defaults, posture: 'custom' }), 0);
+    expect(custom.innerHTML).toBe(neutral.innerHTML);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  Body-size overlap / intersection checks                           */
 /* ------------------------------------------------------------------ */
 describe('body-size overlap checks', () => {

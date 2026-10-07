@@ -294,6 +294,7 @@ function update(updateURL = true) {
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],
     cogOffsetX: vals["cog-offset-x"],
+    posture: vals["posture"],
   });
 
   renderInfo();

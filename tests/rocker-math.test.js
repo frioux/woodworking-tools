@@ -465,3 +465,25 @@ describe('buildRockerModel', () => {
     expect(Math.abs(late - m.thetaEq)).toBeLessThan(0.01);
   });
 });
+
+describe('buildRockerModel posture passthrough', () => {
+  const params = {
+    radius: 42, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+    sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+  };
+
+  it('defaults posture to neutral', () => {
+    expect(buildRockerModel(params).posture).toBe('neutral');
+  });
+
+  it('carries the posture key through to the model', () => {
+    expect(buildRockerModel({ ...params, posture: 'reclined' }).posture).toBe('reclined');
+  });
+
+  it('does not let posture alone change the physics', () => {
+    const a = buildRockerModel({ ...params, posture: 'neutral' });
+    const b = buildRockerModel({ ...params, posture: 'legsForward' });
+    expect(b.thetaEq).toBe(a.thetaEq);
+    expect(b.period).toBe(a.period);
+  });
+});

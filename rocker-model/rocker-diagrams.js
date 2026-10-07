@@ -61,6 +61,26 @@ function localToWorld(lx, ly, arcCenterX, arcCenterY, theta) {
 /* ------------------------------------------------------------------ */
 
 /**
+ * How each posture preset is drawn.  The physics only sees the CoG
+ * offset; these poses make the figure *look* like it is doing what the
+ * preset says.
+ *
+ *   hipShift – inches the hips slide forward on the seat
+ *   lean     – torso lean from vertical (rad, +back / −forward), or null
+ *              to rest the torso against the backrest
+ *   legAngle – lower-leg angle forward of vertical (rad)
+ *   arms     – "lap" (hands in lap), "knees" (elbows on knees) or
+ *              "behindHead" (hands clasped behind the head)
+ */
+const POSES = {
+  neutral:        { hipShift: 0, lean: null,  legAngle: 0.1,  arms: "lap" },
+  leaningForward: { hipShift: 1, lean: -0.35, legAngle: -0.1, arms: "knees" },
+  legsForward:    { hipShift: 0, lean: null,  legAngle: 0.85, arms: "lap" },
+  armsBack:       { hipShift: 0, lean: null,  legAngle: 0.1,  arms: "behindHead" },
+  reclined:       { hipShift: 3, lean: null,  legAngle: 0.5,  arms: "lap" },
+};
+
+/**
  * Render a stick figure person sitting in the chair.
  *
  * The torso is drawn as a triangle whose orientation depends on gender:
@@ -78,8 +98,9 @@ function localToWorld(lx, ly, arcCenterX, arcCenterY, theta) {
  */
 function renderStickFigure(doc, model, theta, geom) {
   const { radius, seatHeight, seatDepth, backrestAngle,
-          sitterGender, sitterHeight } = model;
+          sitterGender, sitterHeight, posture: postureKey } = model;
   const { arcCenterX, arcCenterY } = geom;
+  const pose = POSES[postureKey] || POSES.neutral;
   const s = SCALE;
   const g = svgEl(doc, "g");
 
@@ -123,10 +144,14 @@ function renderStickFigure(doc, model, theta, geom) {
     hipLX = seatHalfLen - thighLen;
     kneeLX = seatHalfLen;
   }
+  // Posture: slide the hips (and so the knees) forward on the seat
+  hipLX += pose.hipShift;
+  kneeLX += pose.hipShift;
   const kneeLY = seatSurfaceY;
 
-  // Foot: lower leg hangs from knee with a slight natural forward lean (~6°)
-  const legForwardAngle = 0.1; // radians
+  // Foot: lower leg hangs from the knee at the pose's forward angle
+  // (neutral is a slight natural lean of ~6°)
+  const legForwardAngle = pose.legAngle; // radians
   const footLX = kneeLX + lowerLegLen * Math.sin(legForwardAngle);
   const footLY = kneeLY - lowerLegLen * Math.cos(legForwardAngle);
 
@@ -202,23 +227,28 @@ function renderStickFigure(doc, model, theta, geom) {
   // the backrest; if the backrest is unreachable, this naturally settles at
   // either the best unsupported lean (up to 45°) or upright.
   let leanRad = 0;
-  let bestDist = Number.POSITIVE_INFINITY;
-  const leanSteps = 180;
-  for (let i = 0; i <= leanSteps; i++) {
-    const lean = (maxLeanRad * i) / leanSteps;
-    const { clear, minDist } = backrestClearanceAtLean(lean);
-    if (!clear) {
-      continue;
-    }
+  if (pose.lean !== null) {
+    // Fixed lean (e.g. leaning forward, away from the backrest)
+    leanRad = pose.lean;
+  } else {
+    let bestDist = Number.POSITIVE_INFINITY;
+    const leanSteps = 180;
+    for (let i = 0; i <= leanSteps; i++) {
+      const lean = (maxLeanRad * i) / leanSteps;
+      const { clear, minDist } = backrestClearanceAtLean(lean);
+      if (!clear) {
+        continue;
+      }
 
-    // Favor the smallest clearance (closest touch). For ties, prefer the
-    // larger lean so an unsupported sitter uses available recline.
-    const distGap = Math.abs(minDist - bestDist);
-    if (minDist < bestDist - 1e-6 || (distGap <= 1e-6 && lean > leanRad)) {
-      bestDist = minDist;
-      leanRad = lean;
-      if (bestDist <= 1e-4) {
-        break;
+      // Favor the smallest clearance (closest touch). For ties, prefer the
+      // larger lean so an unsupported sitter uses available recline.
+      const distGap = Math.abs(minDist - bestDist);
+      if (minDist < bestDist - 1e-6 || (distGap <= 1e-6 && lean > leanRad)) {
+        bestDist = minDist;
+        leanRad = lean;
+        if (bestDist <= 1e-4) {
+          break;
+        }
       }
     }
   }
@@ -298,21 +328,44 @@ function renderStickFigure(doc, model, theta, geom) {
   lowerLegLine.setAttribute("data-testid", "stick-lower-leg");
   g.appendChild(lowerLegLine);
 
-  // --- Upper arm (shoulder forward/down toward lap) ---
-  const elbowLX = hipLX + seatDepth * 0.15;
-  const elbowLY = seatSurfaceY + torsoLen * 0.2;
+  // --- Arms (elbow and hand positions depend on the pose) ---
+  const upperArmLen = sitterHeight * 0.19;
+  let elbowLX;
+  let elbowLY;
+  let handLX;
+  let handLY;
+  if (pose.arms === "knees") {
+    // Leaning forward: elbows resting near the knees, hands hanging past them
+    elbowLX = kneeLX - 2;
+    elbowLY = seatSurfaceY + 3;
+    handLX = kneeLX + 2;
+    handLY = seatSurfaceY - 1;
+  } else if (pose.arms === "behindHead") {
+    // Arms back: elbows out behind the shoulders, hands at the back of the head
+    elbowLX = shoulderLX - upperArmLen * 0.55;
+    elbowLY = shoulderLY + upperArmLen * 0.45;
+    handLX = posture.headBackX;
+    handLY = posture.headBackY;
+  } else {
+    // Hands in lap: upper arm down toward the lap, forearm to the knees
+    elbowLX = hipLX + seatDepth * 0.15;
+    elbowLY = seatSurfaceY + torsoLen * 0.2;
+    handLX = hipLX + (kneeLX - hipLX) * 0.75;
+    handLY = seatSurfaceY + 1;
+  }
   const [elbowWX, elbowWY] = localToWorld(elbowLX, elbowLY,
                                            arcCenterX, arcCenterY, theta);
-  g.appendChild(line(doc, shoulderWX * s, -shoulderWY * s,
-                          elbowWX * s, -elbowWY * s, COLOR_PERSON, 2));
+  const upperArmLine = line(doc, shoulderWX * s, -shoulderWY * s,
+                                 elbowWX * s, -elbowWY * s, COLOR_PERSON, 2);
+  upperArmLine.setAttribute("data-testid", "stick-upper-arm");
+  g.appendChild(upperArmLine);
 
-  // --- Forearm (elbow to lap/knee area) ---
-  const handLX = kneeLX * 0.5;
-  const handLY = seatSurfaceY + 1;
   const [handWX, handWY] = localToWorld(handLX, handLY,
                                          arcCenterX, arcCenterY, theta);
-  g.appendChild(line(doc, elbowWX * s, -elbowWY * s,
-                          handWX * s, -handWY * s, COLOR_PERSON, 2));
+  const forearmLine = line(doc, elbowWX * s, -elbowWY * s,
+                                handWX * s, -handWY * s, COLOR_PERSON, 2);
+  forearmLine.setAttribute("data-testid", "stick-forearm");
+  g.appendChild(forearmLine);
 
   return g;
 }

@@ -324,12 +324,14 @@ export function systemCogOffsetX(sitterWeight, sitterOffsetX, chairWeight, chair
  * @param {"male"|"female"} params.sitterGender
  * @param {number} [params.chairWeight=0] – chair weight (lb); 0 ignores it
  * @param {number} [params.cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
+ * @param {string} [params.posture="neutral"] – posture preset key (see POSTURE_PRESETS);
+ *   drives how the sitter is drawn, not the physics (which uses cogOffsetX)
  * @returns {object} model with derived quantities and a `angleAt(t)` function
  */
 export function buildRockerModel(params) {
   const { radius, seatHeight, seatDepth, backrestAngle = 100,
           sitterWeight, sitterHeight, sitterGender,
-          chairWeight = 0, cogOffsetX = 0 } = params;
+          chairWeight = 0, cogOffsetX = 0, posture = "neutral" } = params;
 
   // Sitter CoG
   const sitterCogAbove = sitterCogAboveSeat(sitterHeight, sitterGender);
@@ -367,6 +369,7 @@ export function buildRockerModel(params) {
     backrestAngle,
     sitterGender,
     sitterHeight,
+    posture,
     cogAboveSeat,
     cogHeight,
     chairWeight,

@@ -484,31 +484,56 @@ export function renderChairProfile(doc, model, theta) {
   g.appendChild(renderStickFigure(doc, model, theta, geom));
 
   // --- Centre of gravity marker ---
-  g.appendChild(svgEl(doc, "circle", {
+  // Combined chair + sitter centre of gravity.  At rest it sits plumb
+  // over the rocker contact point; while rocking the plumb line lands
+  // fore or aft of the contact, which is what rolls the chair back.
+  const cog = svgEl(doc, "g", { "data-testid": "cog" });
+  cog.appendChild(line(doc, cogX * s, -cogY * s, cogX * s, 0, COLOR_COG, 1, "3 3"));
+  cog.appendChild(svgEl(doc, "circle", {
     cx: cogX * s,
     cy: -cogY * s,
     r: 4,
     fill: COLOR_COG,
     opacity: 0.8,
   }));
-  // Label
+  // Keep the CoG and radius-centre labels apart when the two points are
+  // close together (small radius): whichever point is lower gets its
+  // label below-right, the upper one above-right.
+  const labelGap = Math.abs(cogY - arcCenterY);
+  const cogLabelBelow = labelGap < 6 && cogY <= arcCenterY;
   const cogLabel = svgEl(doc, "text", {
     x: cogX * s + 8,
-    y: -cogY * s - 8,
+    y: cogLabelBelow ? -cogY * s + 14 : -cogY * s - 8,
     "font-size": 10,
     fill: COLOR_COG,
     "font-family": "sans-serif",
   });
-  cogLabel.textContent = "CoG";
-  g.appendChild(cogLabel);
+  cogLabel.textContent = "Center of gravity";
+  cog.appendChild(cogLabel);
+  g.appendChild(cog);
+  if (labelGap < 6 && cogY > arcCenterY) {
+    rcLabel.setAttribute("y", -arcCenterY * s + 14);
+  }
 
   // --- Contact point marker ---
-  g.appendChild(svgEl(doc, "circle", {
+  const contact = svgEl(doc, "g", { "data-testid": "contact-point" });
+  contact.appendChild(svgEl(doc, "circle", {
     cx: contactX * s,
     cy: 0,
     r: 3,
     fill: COLOR_LEGS,
   }));
+  const contactLabel = svgEl(doc, "text", {
+    x: contactX * s,
+    y: 14,
+    "font-size": 10,
+    fill: COLOR_LEGS,
+    "font-family": "sans-serif",
+    "text-anchor": "middle",
+  });
+  contactLabel.textContent = "Rocker contact point";
+  contact.appendChild(contactLabel);
+  g.appendChild(contact);
 
   return g;
 }

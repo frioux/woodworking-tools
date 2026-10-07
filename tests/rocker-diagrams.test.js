@@ -44,11 +44,32 @@ describe('renderChairProfile', () => {
     expect(circles.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('contains CoG label text', () => {
+  it('labels the centre of gravity in full', () => {
     const g = renderChairProfile(doc, model, 0);
     const texts = g.querySelectorAll('text');
-    const cogText = Array.from(texts).find(t => t.textContent === 'CoG');
+    const cogText = Array.from(texts).find(t => t.textContent === 'Center of gravity');
     expect(cogText).toBeTruthy();
+  });
+
+  it('labels the rocker contact point on the floor', () => {
+    const g = renderChairProfile(doc, model, 0.1);
+    const contact = g.querySelector('[data-testid="contact-point"]');
+    expect(contact).toBeTruthy();
+    const label = contact.querySelector('text');
+    expect(label.textContent).toBe('Rocker contact point');
+    // Centred on the contact point, which is at x = R·θ (world inches)
+    expect(parseFloat(label.getAttribute('x'))).toBeCloseTo(42 * 0.1 * 4, 5);
+    expect(parseFloat(contact.querySelector('circle').getAttribute('cy'))).toBe(0);
+  });
+
+  it('drops a plumb line from the centre of gravity to the floor', () => {
+    const g = renderChairProfile(doc, model, 0.1);
+    const cog = g.querySelector('[data-testid="cog"]');
+    const plumb = cog.querySelector('line');
+    const circle = cog.querySelector('circle');
+    expect(plumb.getAttribute('x1')).toBe(plumb.getAttribute('x2'));
+    expect(plumb.getAttribute('x1')).toBe(circle.getAttribute('cx'));
+    expect(parseFloat(plumb.getAttribute('y2'))).toBe(0);
   });
 
   it('marks the rocker radius centre directly above the contact point', () => {

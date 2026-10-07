@@ -455,8 +455,13 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     fill: "transparent",
     "data-testid": "radius-center-hit",
   }));
-  rc.appendChild(line(doc, arcCenterX * s, -arcCenterY * s, contactX * s, 0,
-    COLOR_ROCKER, 1, "6 4"));
+  if (showDetails) {
+    // Dashed radius line down to the contact point
+    const radiusLine = line(doc, arcCenterX * s, -arcCenterY * s, contactX * s, 0,
+      COLOR_ROCKER, 1, "6 4");
+    radiusLine.setAttribute("data-testid", "radius-line");
+    rc.appendChild(radiusLine);
+  }
   const crossLen = 2 * s;
   rc.appendChild(line(doc, (arcCenterX * s) - crossLen, -arcCenterY * s,
     (arcCenterX * s) + crossLen, -arcCenterY * s, COLOR_ROCKER, 1.5));
@@ -470,25 +475,32 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     stroke: COLOR_ROCKER,
     "stroke-width": 1.5,
   }));
-  // Two short lines plus a hint so the label stays inside the fixed
-  // frame while the chair rocks fore and aft.
+  // By default only the marker and a "tap for details" hint are shown.
+  // With details on, add the name and radius value as two short lines
+  // (so the label stays inside the fixed frame while rocking) above
+  // the hint.
   const rcTextAttrs = {
     x: arcCenterX * s + 10,
     "font-size": 10,
     fill: COLOR_ROCKER,
     "font-family": "sans-serif",
   };
-  const rcLabel = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s - 8 });
-  rcLabel.textContent = "Rocker radius center";
-  rc.appendChild(rcLabel);
-  const rcValue = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s + 4 });
-  rcValue.textContent = `R = ${radius} in`;
-  rc.appendChild(rcValue);
+  let rcLabel = null;
+  let rcValue = null;
+  if (showDetails) {
+    rcLabel = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s - 8 });
+    rcLabel.textContent = "Rocker radius center";
+    rc.appendChild(rcLabel);
+    rcValue = svgEl(doc, "text", { ...rcTextAttrs, y: -arcCenterY * s + 4 });
+    rcValue.textContent = `R = ${radius} in`;
+    rc.appendChild(rcValue);
+  }
   const rcHint = svgEl(doc, "text", {
     ...rcTextAttrs,
-    y: -arcCenterY * s + 15,
+    y: -arcCenterY * s + (showDetails ? 15 : 4),
     "font-size": 8,
     opacity: 0.65,
+    "data-testid": "radius-center-hint",
   });
   rcHint.textContent = showDetails ? "tap to hide details" : "tap for details";
   rc.appendChild(rcHint);

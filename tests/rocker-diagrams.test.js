@@ -82,14 +82,29 @@ describe('renderChairProfile', () => {
     expect(parseFloat(plumb.getAttribute('y2'))).toBe(0);
   });
 
+  it('shows only the marker and a hint until details are requested', () => {
+    const g = renderChairProfile(doc, model, 0);
+    const rc = g.querySelector('[data-testid="radius-center"]');
+    expect(rc.querySelector('[data-testid="radius-line"]')).toBeNull();
+    const texts = Array.from(rc.querySelectorAll('text')).map(t => t.textContent);
+    expect(texts).toEqual(['tap for details']);
+    // The crosshair marker itself is still drawn
+    expect(rc.querySelectorAll('line').length).toBe(2);
+  });
+
   it('marks the rocker radius centre directly above the contact point', () => {
     const theta = 0.2;
-    const g = renderChairProfile(doc, model, theta);
+    const g = renderChairProfile(doc, model, theta, { showDetails: true });
     const rc = g.querySelector('[data-testid="radius-center"]');
     expect(rc).toBeTruthy();
     const texts = Array.from(rc.querySelectorAll('text')).map(t => t.textContent);
     expect(texts.some(t => /radius center/i.test(t))).toBe(true);
     expect(texts).toContain('R = 42 in');
+    expect(texts).toContain('tap to hide details');
+    const radiusLine = rc.querySelector('[data-testid="radius-line"]');
+    expect(radiusLine).toBeTruthy();
+    expect(parseFloat(radiusLine.getAttribute('x2'))).toBeCloseTo(42 * theta * 4, 5);
+    expect(parseFloat(radiusLine.getAttribute('y2'))).toBe(0);
 
     // The centre marker circle sits at (R·θ, R) in world inches → SVG (x·4, −y·4)
     const circle = rc.querySelector('circle');

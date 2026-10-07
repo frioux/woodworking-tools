@@ -14,6 +14,14 @@ import {
   systemCogOffsetX,
   buildRockerModel,
   POSTURE_PRESETS,
+  runnerExtent,
+  fallDirection,
+  tippedGeometry,
+  backrestLength,
+  localToWorld,
+  buildFall,
+  RUNNER_REAR_OVERHANG,
+  RUNNER_FRONT_OVERHANG,
 } from '../rocker-model/rocker-math.js';
 
 /* ------------------------------------------------------------------ */
@@ -485,5 +493,269 @@ describe('buildRockerModel posture passthrough', () => {
     const b = buildRockerModel({ ...params, posture: 'legsForward' });
     expect(b.thetaEq).toBe(a.thetaEq);
     expect(b.period).toBe(a.period);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  runnerExtent                                                      */
+/* ------------------------------------------------------------------ */
+describe('runnerExtent', () => {
+  it('reaches the overhang distance past each leg along the floor', () => {
+    const { rearAngle, frontAngle } = runnerExtent(42, 16);
+    expect(42 * Math.sin(rearAngle)).toBeCloseTo(8 + RUNNER_REAR_OVERHANG);
+    expect(42 * Math.sin(frontAngle)).toBeCloseTo(8 + RUNNER_FRONT_OVERHANG);
+  });
+
+  it('has a longer tail than nose', () => {
+    const { rearAngle, frontAngle } = runnerExtent(42, 16);
+    expect(rearAngle).toBeGreaterThan(frontAngle);
+  });
+
+  it('wraps further round a tighter radius', () => {
+    expect(runnerExtent(26, 16).rearAngle).toBeGreaterThan(runnerExtent(42, 16).rearAngle);
+  });
+
+  it('never wraps past 80° even for a tiny radius', () => {
+    const { rearAngle, frontAngle } = runnerExtent(10, 16);
+    expect(rearAngle).toBeCloseTo((80 * Math.PI) / 180);
+    expect(frontAngle).toBeCloseTo((80 * Math.PI) / 180);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  fallDirection                                                     */
+/* ------------------------------------------------------------------ */
+describe('fallDirection', () => {
+  const runner = { rearAngle: 0.5, frontAngle: 0.4 };
+
+  it('stays up when the rest angle is within the runner', () => {
+    expect(fallDirection(true, 0, 0, runner)).toBe(0);
+    expect(fallDirection(true, 0.3, 0, runner)).toBe(0);
+    expect(fallDirection(true, -0.4, 0, runner)).toBe(0);
+  });
+
+  it('falls forward when resting past the nose of the runner', () => {
+    expect(fallDirection(true, 0.45, 0, runner)).toBe(1);
+  });
+
+  it('falls backward when resting past the tail of the runner', () => {
+    expect(fallDirection(true, -0.55, 0, runner)).toBe(-1);
+  });
+
+  it('treats the last degree of runner as over the edge', () => {
+    expect(fallDirection(true, 0.4 - 0.005, 0, runner)).toBe(1);
+  });
+
+  it('tips an unstable chair toward its centre of gravity', () => {
+    expect(fallDirection(false, 0, 2, runner)).toBe(1);
+    expect(fallDirection(false, 0, -2, runner)).toBe(-1);
+    expect(fallDirection(false, 0, 0, runner)).toBe(-1);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  tippedGeometry                                                    */
+/* ------------------------------------------------------------------ */
+describe('tippedGeometry', () => {
+  it('matches the rolling geometry before the chair starts to pivot', () => {
+    const rolling = rockerGeometry(42, 17, 16, 10, 0.3, 1);
+    const tipped = tippedGeometry(42, 17, 10, 1, 0.3, 0);
+    for (const k of Object.keys(rolling)) {
+      expect(tipped[k]).toBeCloseTo(rolling[k]);
+    }
+  });
+
+  it('keeps the pivot fixed on the floor while the arc centre swings round it', () => {
+    const g = tippedGeometry(42, 17, 10, 0, 0.3, 0.5);
+    expect(g.contactX).toBeCloseTo(42 * 0.3);
+    const dx = g.arcCenterX - g.contactX;
+    const dy = g.arcCenterY;
+    expect(Math.hypot(dx, dy)).toBeCloseTo(42);
+    expect(g.arcCenterX).toBeGreaterThan(42 * 0.3); // swung forward
+    expect(g.arcCenterY).toBeLessThan(42);           // and down
+  });
+
+  it('swings backward for a negative pivot angle', () => {
+    const g = tippedGeometry(42, 17, 10, 0, -0.3, -0.5);
+    expect(g.arcCenterX).toBeLessThan(-42 * 0.3);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  backrestLength / localToWorld                                     */
+/* ------------------------------------------------------------------ */
+describe('backrestLength', () => {
+  it('grows with the sitter', () => {
+    expect(backrestLength(76, 100)).toBeGreaterThan(backrestLength(60, 100));
+  });
+
+  it('is longer for a more reclined backrest', () => {
+    expect(backrestLength(70, 120)).toBeGreaterThan(backrestLength(70, 90));
+  });
+});
+
+describe('localToWorld', () => {
+  it('is a pure translation at zero rotation', () => {
+    expect(localToWorld(1, 2, 10, 20, 0)).toEqual([11, 22]);
+  });
+
+  it('rotates clockwise for positive theta', () => {
+    // A point straight above the centre swings forward (+x) when tilted forward
+    const [x, y] = localToWorld(0, 10, 0, 0, Math.PI / 2);
+    expect(x).toBeCloseTo(10);
+    expect(y).toBeCloseTo(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  buildRockerModel — runners and falling                            */
+/* ------------------------------------------------------------------ */
+describe('buildRockerModel runner limits', () => {
+  const base = {
+    radius: 42, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+    chairWeight: 25, sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+  };
+
+  it('stays upright at a sensible radius', () => {
+    const m = buildRockerModel(base);
+    expect(m.fallDirection).toBe(0);
+    expect(m.runnerRearAngle).toBeGreaterThan(0);
+    expect(m.runnerFrontAngle).toBeGreaterThan(0);
+  });
+
+  it('falls backward at the reported 26 in radius (rest angle past the runner tail)', () => {
+    const m = buildRockerModel({ ...base, radius: 26 });
+    expect(m.thetaEq).toBeLessThan(-m.runnerRearAngle);
+    expect(m.fallDirection).toBe(-1);
+    expect(m.initialAmplitude).toBe(0);
+  });
+
+  it('still rocks at 27 in, one inch away', () => {
+    const m = buildRockerModel({ ...base, radius: 27 });
+    expect(m.fallDirection).toBe(0);
+    expect(m.initialAmplitude).toBeGreaterThan(0);
+  });
+
+  it('falls forward for the reported shallow seat / upright back case', () => {
+    const m = buildRockerModel({ ...base, radius: 26, seatDepth: 6, backrestAngle: 70, sitterWeight: 190 });
+    expect(m.fallDirection).toBe(1);
+  });
+
+  it('falls over when the CoG is above the rocker centre', () => {
+    const m = buildRockerModel({ ...base, radius: 20, seatHeight: 19 });
+    expect(m.stable).toBe(false);
+    expect(m.fallDirection).not.toBe(0);
+  });
+
+  it('never swings past the ends of the runners', () => {
+    for (const cogOffsetX of [-4, -2, 0, 2, 4]) {
+      const m = buildRockerModel({ ...base, cogOffsetX });
+      expect(m.fallDirection).toBe(0);
+      expect(m.thetaEq + m.initialAmplitude).toBeLessThan(m.runnerFrontAngle);
+      expect(m.thetaEq - m.initialAmplitude).toBeGreaterThan(-m.runnerRearAngle);
+    }
+  });
+
+  it('exposes the sitter CoG height for the fall simulation', () => {
+    const m = buildRockerModel(base);
+    expect(m.sitterCogAbove).toBeCloseTo(sitterCogAboveSeat(70, 'male'));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  buildFall                                                         */
+/* ------------------------------------------------------------------ */
+describe('buildFall', () => {
+  const base = {
+    radius: 26, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+    chairWeight: 25, sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+  };
+
+  it('returns null for a chair that stays up', () => {
+    expect(buildFall(buildRockerModel({ ...base, radius: 42 }))).toBeNull();
+  });
+
+  it('rolls back to the runner tail and then goes over backward', () => {
+    const m = buildRockerModel(base);
+    const fall = buildFall(m);
+    expect(fall.direction).toBe(-1);
+    expect(fall.thetaEnd).toBeCloseTo(-m.runnerRearAngle);
+    expect(fall.thetaFinal).toBeLessThan(fall.thetaEnd - 0.5);
+    // Starts level, on its runners
+    const p0 = fall.poseAt(0);
+    expect(p0.theta).toBeCloseTo(0);
+    expect(p0.geom.arcCenterY).toBeCloseTo(26);
+    expect(p0.sitter).toBeNull();
+    // Angle only ever decreases (rolls and tips the same way) until it lands
+    let prev = 0;
+    for (let t = 0.05; t < fall.duration; t += 0.05) {
+      const theta = fall.poseAt(t).theta;
+      expect(theta).toBeLessThanOrEqual(prev + 1e-9);
+      prev = theta;
+      if (theta <= fall.thetaFinal + 1e-9) {
+        break;
+      }
+    }
+  });
+
+  it('pivots on the runner tip once past the end', () => {
+    const fall = buildFall(buildRockerModel(base));
+    // Find a moment well past the runner tail but before the floor
+    const t = [...Array(200)].map((_, i) => i * 0.01)
+      .find((t) => fall.poseAt(t).theta < fall.thetaEnd - 0.3);
+    const { geom } = fall.poseAt(t);
+    expect(geom.contactX).toBeCloseTo(26 * fall.thetaEnd);
+    expect(geom.arcCenterY).toBeLessThan(26);
+    expect(Math.hypot(geom.arcCenterX - geom.contactX, geom.arcCenterY)).toBeCloseTo(26);
+  });
+
+  it('throws the sitter out, who lands on the far side and complains', () => {
+    const fall = buildFall(buildRockerModel(base));
+    const end = fall.poseAt(fall.duration);
+    expect(end.done).toBe(true);
+    expect(end.sitter).toBeTruthy();
+    expect(end.sitter.lift).toBe(true);
+    // Sitter ended up behind the chair's pivot (backward fall)
+    expect(end.sitter.arcCenterX).toBeLessThan(end.geom.contactX);
+    // Said "oof!" at some point after landing, but not for ever
+    const said = [...Array(400)].map((_, i) => fall.poseAt(i * 0.01).sitter?.say).filter(Boolean);
+    expect(said).toContain('oof!');
+    expect(end.sitter.say).toBeUndefined();
+  });
+
+  it('throws the sitter forward in a forward fall', () => {
+    const m = buildRockerModel({ ...base, seatDepth: 6, backrestAngle: 70, sitterWeight: 190 });
+    const fall = buildFall(m);
+    expect(fall.direction).toBe(1);
+    const end = fall.poseAt(fall.duration);
+    expect(end.theta).toBeGreaterThan(m.runnerFrontAngle);
+    expect(end.sitter.arcCenterX).toBeGreaterThan(end.geom.contactX);
+  });
+
+  it('can start from wherever the chair was', () => {
+    const m = buildRockerModel(base);
+    const fall = buildFall(m, -0.3);
+    expect(fall.poseAt(0).theta).toBeCloseTo(-0.3);
+    // A start beyond the runners is pulled back onto them
+    expect(buildFall(m, -5).poseAt(0).theta).toBeCloseTo(-m.runnerRearAngle);
+  });
+
+  it('the final pose matches poseAt(duration)', () => {
+    const fall = buildFall(buildRockerModel(base));
+    expect(fall.finalPose).toEqual(fall.poseAt(fall.duration));
+  });
+
+  it('keeps the sitter above the floor until they come to rest', () => {
+    const fall = buildFall(buildRockerModel(base));
+    const m = buildRockerModel(base);
+    for (let t = 0; t <= fall.duration; t += 0.02) {
+      const { sitter } = fall.poseAt(t);
+      if (!sitter) {
+        continue;
+      }
+      const [, cogY] = localToWorld(m.sitterCogOffsetX, m.seatHeight - m.radius + m.sitterCogAbove,
+        sitter.arcCenterX, sitter.arcCenterY, sitter.theta);
+      expect(cogY).toBeGreaterThan(2.9);
+    }
   });
 });

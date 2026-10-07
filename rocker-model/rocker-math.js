@@ -94,8 +94,104 @@ export function equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Runner extent                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How far the runners (rockers) extend past the legs, in inches
+ * measured along the floor.  Real rockers carry a long tail behind the
+ * back leg (so a reclining sitter cannot easily go over backwards) and
+ * a shorter nose ahead of the front leg.
+ */
+export const RUNNER_REAR_OVERHANG = 12;
+export const RUNNER_FRONT_OVERHANG = 8;
+
+// A runner can never wrap more than this far round its own circle.
+const MAX_RUNNER_ANGLE = (80 * Math.PI) / 180;
+
+/**
+ * Angular extent of the runner either side of the chair's centreline.
+ *
+ * The legs stand at ±seatDepth/2 and the runner continues past them by
+ * the overhangs above.  Each end sits on the arc at the angle whose
+ * horizontal distance from the arc bottom matches that length.
+ *
+ * @param {number} radius    – rocker curve radius (in)
+ * @param {number} seatDepth – seat depth (in)
+ * @returns {{rearAngle: number, frontAngle: number}} both positive (rad)
+ */
+export function runnerExtent(radius, seatDepth) {
+  const maxSin = Math.sin(MAX_RUNNER_ANGLE);
+  const rearX = seatDepth / 2 + RUNNER_REAR_OVERHANG;
+  const frontX = seatDepth / 2 + RUNNER_FRONT_OVERHANG;
+  return {
+    rearAngle: Math.asin(Math.min(maxSin, rearX / radius)),
+    frontAngle: Math.asin(Math.min(maxSin, frontX / radius)),
+  };
+}
+
+// A chair resting this close to the end of its runner is treated as over
+// the edge.
+const TIP_MARGIN = (1 * Math.PI) / 180;
+
+/**
+ * Decide whether the chair falls over, and which way.
+ *
+ * A rocker can only roll as far as the ends of its runners.  If the
+ * resting tilt would put the contact point beyond an end, the centre of
+ * gravity is still outside the runner tip when the chair gets there and
+ * it keeps going: it tips over.  A chair whose centre of gravity sits
+ * at or above the arc centre (unstable) tips toward whichever side the
+ * centre of gravity is on.
+ *
+ * @param {boolean} stable      – from effectivePendulumLength(...) > 0
+ * @param {number}  thetaEq     – resting tilt (rad, + forward)
+ * @param {number}  cogOffsetX  – system CoG fore/aft offset (in)
+ * @param {{rearAngle: number, frontAngle: number}} runner
+ * @returns {number} +1 falls forward, −1 falls backward, 0 stays up
+ */
+export function fallDirection(stable, thetaEq, cogOffsetX, runner) {
+  if (!stable) {
+    return cogOffsetX > 0 ? 1 : -1;
+  }
+  if (thetaEq >= runner.frontAngle - TIP_MARGIN) {
+    return 1;
+  }
+  if (thetaEq <= -(runner.rearAngle - TIP_MARGIN)) {
+    return -1;
+  }
+  return 0;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Chair geometry helpers                                            */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Rotate a point from the chair's local frame into the world frame.
+ * Positive θ is a clockwise rotation (the chair tilting forward).
+ *
+ * @returns {[number, number]} [worldX, worldY]
+ */
+export function localToWorld(lx, ly, arcCenterX, arcCenterY, theta) {
+  const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
+  const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
+  return [wx, wy];
+}
+
+/**
+ * Seat and centre-of-gravity positions for a chair body rotated by
+ * θ with its arc centre at the given world position.  This is the
+ * common core of rockerGeometry() (arc centre rolling along the floor)
+ * and tippedGeometry() (chair pivoting on a runner tip).
+ */
+function bodyGeometry(radius, seatHeight, cogAboveSeat, cogOffsetX, theta,
+                      arcCenterX, arcCenterY, contactX) {
+  const [seatX, seatY] = localToWorld(0, seatHeight - radius, arcCenterX, arcCenterY, theta);
+  const [cogX, cogY] = localToWorld(cogOffsetX, seatHeight - radius + cogAboveSeat,
+                                    arcCenterX, arcCenterY, theta);
+  return { contactX, seatX, seatY, cogX, cogY, arcCenterX, arcCenterY };
+}
 
 /**
  * Compute the contact-point geometry of the rocker at a given tilt angle.
@@ -120,29 +216,47 @@ export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, thet
   //   - the chair body rotates clockwise by θ (positive θ = tilted forward:
   //     the contact point rolls forward along the floor and the backrest
   //     stands up; negative θ rocks the chair back)
+  const contactX = radius * theta;
+  return bodyGeometry(radius, seatHeight, cogAboveSeat, cogOffsetX, theta,
+                      contactX, radius, contactX);
+}
 
-  const contactX = radius * theta;                       // floor contact
-  const arcCenterX = contactX;                           // directly above contact
-  const arcCenterY = radius;                             // always at height R
+/**
+ * Geometry of a chair that has rolled to the end of its runner (tilt
+ * `thetaEnd`) and is now pivoting about that runner tip by a further
+ * angle `phi` (same sign convention as θ).
+ *
+ * The tip is the last contact point, at (R·thetaEnd, 0).  The arc
+ * centre, which sat directly above it, swings round the tip.
+ *
+ * @returns same shape as rockerGeometry(); `contactX` is the pivot.
+ */
+export function tippedGeometry(radius, seatHeight, cogAboveSeat, cogOffsetX, thetaEnd, phi) {
+  const pivotX = radius * thetaEnd;
+  const arcCenterX = pivotX + radius * Math.sin(phi);
+  const arcCenterY = radius * Math.cos(phi);
+  return bodyGeometry(radius, seatHeight, cogAboveSeat, cogOffsetX, thetaEnd + phi,
+                      arcCenterX, arcCenterY, pivotX);
+}
 
-  // In the local (chair) frame, seat midpoint = (0, seatHeight - R) relative
-  // to the arc centre.  seatHeight < R typically, so the seat is *below*
-  // the arc centre.  The backrest / CoG offset along the seat is at
-  // local-x = -seatDepth/2  (backward from seat midpoint).
-
-  // Rotate local frame by θ clockwise (positive θ = tilted forward):
-  const localSeatX = 0;
-  const localSeatY = seatHeight - radius;
-  const seatX = arcCenterX + localSeatX * Math.cos(theta) + localSeatY * Math.sin(theta);
-  const seatY = arcCenterY - localSeatX * Math.sin(theta) + localSeatY * Math.cos(theta);
-
-  // CoG fore/aft position in local frame (positive = toward front)
-  const localCogX = cogOffsetX;
-  const localCogY = seatHeight - radius + cogAboveSeat;
-  const cogX = arcCenterX + localCogX * Math.cos(theta) + localCogY * Math.sin(theta);
-  const cogY = arcCenterY - localCogX * Math.sin(theta) + localCogY * Math.cos(theta);
-
-  return { contactX, seatX, seatY, cogX, cogY, arcCenterX, arcCenterY };
+/**
+ * Length of the backrest, from the rear seat edge to its top.
+ *
+ * Sized so the sitter's head never projects past the end: torso plus
+ * head, with an allowance for the seat plank thickness and the slope of
+ * the backrest.  Shared by the renderer and the fall simulation.
+ *
+ * @param {number} sitterHeight  – standing height (in)
+ * @param {number} backrestAngle – degrees from the seat (90 = vertical)
+ * @returns {number} backrest length (in)
+ */
+export function backrestLength(sitterHeight, backrestAngle) {
+  const a = ((backrestAngle || 100) * Math.PI) / 180;
+  const sittingHt = sitterHeight * 0.52;
+  const seatThickness = 1;
+  const torsoLen = sittingHt * 0.38;
+  const headR = sittingHt * 0.07;
+  return torsoLen + 3 * headR + (seatThickness + headR) / Math.sin(a);
 }
 
 /* ------------------------------------------------------------------ */
@@ -353,17 +467,27 @@ export function buildRockerModel(params) {
   const period = rockingPeriod(lEff);
   const damping = estimateDamping(sitterWeight);
   const stable = lEff > 0;
-  // Constant-energy push: a given kick tilts a tight-radius rocker much
-  // further than a flat one.  Calibrated so R ≈ 42″ with a typical sitter
-  // gives ~15°.  Capped at 30° to stay in the small-angle regime.
-  const baseAmplitude = Math.PI / 12;
-  const referenceGap = 16; // inches — typical gap at R = 42″
-  const initialAmplitude = stable
-    ? Math.min(Math.PI / 6, baseAmplitude * Math.sqrt(referenceGap / (radius - cogHeight)))
-    : 0;
   const thetaEq = stable
     ? equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetSystemX)
     : 0;
+
+  // The runners only reach so far; past their ends the chair tips over.
+  const runner = runnerExtent(radius, seatDepth);
+  const falls = fallDirection(stable, thetaEq, cogOffsetSystemX, runner);
+
+  // Constant-energy push: a given kick tilts a tight-radius rocker much
+  // further than a flat one.  Calibrated so R ≈ 42″ with a typical sitter
+  // gives ~15°.  Capped at 30° to stay in the small-angle regime, and
+  // never allowed to swing past the ends of the runners.
+  const baseAmplitude = Math.PI / 12;
+  const referenceGap = 16; // inches — typical gap at R = 42″
+  let initialAmplitude = 0;
+  if (stable && !falls) {
+    const pushAmplitude = baseAmplitude * Math.sqrt(referenceGap / (radius - cogHeight));
+    const roomForward = runner.frontAngle - thetaEq - TIP_MARGIN;
+    const roomBack = runner.rearAngle + thetaEq - TIP_MARGIN;
+    initialAmplitude = Math.max(0, Math.min(Math.PI / 6, pushAmplitude, roomForward, roomBack));
+  }
 
   return {
     radius,
@@ -385,6 +509,11 @@ export function buildRockerModel(params) {
     stable,
     initialAmplitude,
     thetaEq,
+    sitterCogAbove,
+    runnerRearAngle: runner.rearAngle,
+    runnerFrontAngle: runner.frontAngle,
+    /** +1 tips forward, −1 tips backward, 0 stays on its runners. */
+    fallDirection: falls,
 
     /** Angular position at time t (seconds), oscillating around equilibrium. */
     angleAt(t) {
@@ -399,5 +528,199 @@ export function buildRockerModel(params) {
         ...rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetSystemX),
       };
     },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Falling over                                                      */
+/* ------------------------------------------------------------------ */
+
+// How long the chair takes to roll to the runner tip and go over.
+const FALL_DURATION = 1.8;
+// Shape of the fall: an inverted pendulum pulls away from balance like
+// cosh(t) − 1 — a slow teeter that turns into a rush.  Larger = more
+// hang time at the start.
+const FALL_SHARPNESS = 3;
+// After hitting the floor the chair rebounds a few degrees and settles.
+const BOUNCE_DURATION = 0.35;
+const BOUNCE_ANGLE = (3 * Math.PI) / 180;
+// The sitter lets go once the chair has pivoted this far past the tip,
+// or once it has tilted this far from level, whichever comes first.
+const EJECT_ANGLE = 0.2;
+const EJECT_TILT = (55 * Math.PI) / 180;
+// Cartoon gravity for the sitter: a little floatier than real life so
+// the tumble reads at animation speed.
+const SITTER_GRAVITY = GRAVITY * 0.6;
+// The sitter keeps this share of the speed the chair was carrying them
+// at, plus a hop on the way out and some extra spin while airborne.
+const EJECT_CARRY = 0.6;
+const EJECT_POP_X = 40;   // in/s, in the direction of the fall
+const EJECT_POP_Y = 45;   // in/s, up
+const EJECT_SPIN = 2.0;   // rad/s, in the direction of the fall
+// Height of the sitter's centre of gravity when they come to rest in a
+// heap.  The renderer lifts the figure so nothing pokes through the floor.
+const SITTER_REST_HEIGHT = 3;
+// How long the sitter complains after landing.
+const OOF_DURATION = 1.5;
+
+/**
+ * Angle the chair pivots about a runner tip before part of it hits the
+ * floor: the backrest top (falling backward) or the seat front (falling
+ * forward).  Scanned numerically because the first point to land
+ * depends on the geometry.
+ *
+ * @returns {number} pivot angle magnitude (rad)
+ */
+function floorHitAngle(model, thetaEnd, direction) {
+  const { radius, seatHeight, seatDepth, backrestAngle, sitterHeight } = model;
+  const backRad = ((backrestAngle || 100) * Math.PI) / 180;
+  const backH = backrestLength(sitterHeight || 68, backrestAngle);
+  const seatLocalY = seatHeight - radius;
+  const points = [
+    [-seatDepth / 2 + backH * Math.cos(backRad), seatLocalY + backH * Math.sin(backRad)], // backrest top
+    [-seatDepth / 2, seatLocalY],   // rear seat edge
+    [seatDepth / 2, seatLocalY],    // front seat edge
+  ];
+  const step = Math.PI / 360;
+  for (let phi = step; phi < Math.PI; phi += step) {
+    const g = tippedGeometry(radius, seatHeight, 0, 0, thetaEnd, direction * phi);
+    const theta = thetaEnd + direction * phi;
+    const landed = points.some(([lx, ly]) =>
+      localToWorld(lx, ly, g.arcCenterX, g.arcCenterY, theta)[1] <= 0);
+    if (landed) {
+      return phi;
+    }
+  }
+  return Math.PI / 2;
+}
+
+/**
+ * Choreograph the chair falling over.
+ *
+ * The chair rolls from `theta0` to the end of its runner, pivots over
+ * the tip until it hits the floor, bounces once and lies still.  Part
+ * way over, the sitter parts company with the seat and tumbles through
+ * the air until they land in a heap.
+ *
+ * Returns null when the model does not fall (see `model.fallDirection`).
+ *
+ * The returned `poseAt(t)` gives everything the renderer needs:
+ *   theta  – chair body rotation (rad)
+ *   geom   – chair geometry (as rockerGeometry(); arc centre may be off
+ *            the rolling line once the chair is pivoting on a tip)
+ *   sitter – null while seated, otherwise the sitter's own frame
+ *            {theta, arcCenterX, arcCenterY, lift: true, say?}
+ *   done   – true once everything has come to rest
+ *
+ * @param {object} model   – from buildRockerModel()
+ * @param {number} [theta0=0] – tilt the chair starts from (rad)
+ * @returns {{direction: number, duration: number, poseAt: function,
+ *            finalPose: object} | null}
+ */
+export function buildFall(model, theta0 = 0) {
+  const dir = model.fallDirection;
+  if (!dir) {
+    return null;
+  }
+  const { radius, seatHeight, seatDepth, cogAboveSeat, cogOffsetX,
+          sitterCogOffsetX = 0, sitterCogAbove = cogAboveSeat,
+          runnerRearAngle, runnerFrontAngle } = model;
+
+  const thetaEnd = dir > 0 ? runnerFrontAngle : -runnerRearAngle;
+  const start = Math.max(-runnerRearAngle, Math.min(runnerFrontAngle, theta0 || 0));
+  const phiFloor = floorHitAngle(model, thetaEnd, dir);
+  const thetaFinal = thetaEnd + dir * phiFloor;
+  const sweep = thetaFinal - start;
+
+  const T = FALL_DURATION;
+  const k = FALL_SHARPNESS;
+  const norm = Math.cosh(k) - 1;
+  const progress = (u) => (Math.cosh(k * u) - 1) / norm;             // 0 → 1
+  const progressRate = (u) => (k * Math.sinh(k * u)) / norm;          // d/du
+  const timeAtProgress = (p) => (Math.acosh(1 + p * norm) / k) * T;
+
+  // Chair rotation over time: teeter, crash, small bounce, rest.
+  const chairTheta = (t) => {
+    if (t <= 0) {
+      return start;
+    }
+    if (t < T) {
+      return start + sweep * progress(t / T);
+    }
+    if (t < T + BOUNCE_DURATION) {
+      return thetaFinal - dir * BOUNCE_ANGLE * Math.sin((Math.PI * (t - T)) / BOUNCE_DURATION);
+    }
+    return thetaFinal;
+  };
+
+  const chairGeom = (theta) => {
+    const past = dir * (theta - thetaEnd);
+    if (past <= 0) {
+      return rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
+    }
+    return tippedGeometry(radius, seatHeight, cogAboveSeat, cogOffsetX, thetaEnd, theta - thetaEnd);
+  };
+
+  // --- Sitter ejection ---
+  const phiEject = Math.min(EJECT_ANGLE, phiFloor / 2);
+  let thetaEject = dir * Math.min(dir * thetaEnd + phiEject, EJECT_TILT);
+  if (dir * (thetaEject - start) < 0.01) {
+    thetaEject = start + dir * 0.01; // already past it: let go straight away
+  }
+  const tEject = timeAtProgress((thetaEject - start) / sweep);
+  const geomEject = chairGeom(thetaEject);
+  // Sitter CoG in the chair frame and in the world at the moment of release
+  const sitterLX = sitterCogOffsetX;
+  const sitterLY = seatHeight - radius + sitterCogAbove;
+  const [g0x, g0y] = localToWorld(sitterLX, sitterLY,
+                                  geomEject.arcCenterX, geomEject.arcCenterY, thetaEject);
+  // Velocity: carried round the current pivot (the floor contact) by the
+  // chair's rotation, plus a hop
+  const omegaChair = (progressRate(tEject / T) * sweep) / T;
+  const pivotX = geomEject.contactX;
+  const vx = EJECT_CARRY * omegaChair * g0y + dir * EJECT_POP_X;
+  const vy = -EJECT_CARRY * omegaChair * (g0x - pivotX) + EJECT_POP_Y;
+  const spin = omegaChair + dir * EJECT_SPIN;
+  // Time in the air until the CoG reaches its resting height
+  const drop = Math.max(0, g0y - SITTER_REST_HEIGHT);
+  const tAir = (vy + Math.sqrt(vy * vy + 2 * SITTER_GRAVITY * drop)) / SITTER_GRAVITY;
+
+  const sitterFrame = (t) => {
+    if (t < tEject) {
+      return null;
+    }
+    const tau = Math.min(t - tEject, tAir);
+    const gx = g0x + vx * tau;
+    const gy = g0y + vy * tau - 0.5 * SITTER_GRAVITY * tau * tau;
+    const theta = thetaEject + spin * tau;
+    // Place the frame origin so the sitter's CoG lands at (gx, gy)
+    const [ox, oy] = localToWorld(sitterLX, sitterLY, 0, 0, theta);
+    const frame = { theta, arcCenterX: gx - ox, arcCenterY: gy - oy, lift: true };
+    const sinceLanding = t - tEject - tAir;
+    if (sinceLanding >= 0 && sinceLanding < OOF_DURATION) {
+      frame.say = "oof!";
+    }
+    return frame;
+  };
+
+  const duration = Math.max(T + BOUNCE_DURATION, tEject + tAir + OOF_DURATION);
+
+  const poseAt = (t) => {
+    const theta = chairTheta(t);
+    return {
+      theta,
+      geom: chairGeom(theta),
+      sitter: sitterFrame(t),
+      done: t >= duration,
+    };
+  };
+
+  return {
+    direction: dir,
+    thetaEnd,
+    thetaFinal,
+    duration,
+    poseAt,
+    finalPose: poseAt(duration),
   };
 }

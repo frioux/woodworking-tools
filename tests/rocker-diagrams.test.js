@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
-import { buildRockerModel } from '../rocker-model/rocker-math.js';
-import { renderChairProfile, renderScene, renderInfoPanel } from '../rocker-model/rocker-diagrams.js';
+import { buildRockerModel, buildFall } from '../rocker-model/rocker-math.js';
+import { renderChairProfile, renderScene, renderInfoPanel, profileExtent } from '../rocker-model/rocker-diagrams.js';
 
 const defaults = {
   radius: 42,
@@ -548,12 +548,13 @@ describe('renderInfoPanel', () => {
   });
 
   it('reports the natural tilt direction to match the drawing', () => {
-    // A CoG well ahead of seat centre rolls the chair forward (positive
-    // θ in rockerGeometry); well behind rolls it back.
-    const fwd = buildRockerModel({ ...defaults, cogOffsetX: 6 });
+    // A CoG ahead of seat centre rolls the chair forward (positive θ in
+    // rockerGeometry); behind rolls it back.  (Much further than this
+    // and the chair rolls off the end of its runners instead.)
+    const fwd = buildRockerModel({ ...defaults, cogOffsetX: 3 });
     expect(fwd.thetaEq).toBeGreaterThan(0);
     expect(renderInfoPanel(doc, fwd).textContent).toMatch(/Natural tilt[^°]*°\s*\(fwd\)/);
-    const back = buildRockerModel({ ...defaults, cogOffsetX: -6 });
+    const back = buildRockerModel({ ...defaults, cogOffsetX: -3 });
     expect(back.thetaEq).toBeLessThan(0);
     expect(renderInfoPanel(doc, back).textContent).toMatch(/Natural tilt[^°]*°\s*\(back\)/);
     // The magnitude is shown unsigned; the word carries the direction
@@ -571,5 +572,118 @@ describe('renderInfoPanel', () => {
     const dl = renderInfoPanel(doc, unstable);
     const text = dl.textContent;
     expect(text).toContain('Unstable');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Runner length                                                     */
+/* ------------------------------------------------------------------ */
+describe('runner drawing', () => {
+  const arcEnds = (m, theta) => {
+    const d = renderChairProfile(doc, m, theta).querySelector('path').getAttribute('d');
+    const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/g).map(Number);
+    return { first: [nums[0], nums[1]], last: [nums[nums.length - 2], nums[nums.length - 1]] };
+  };
+
+  it('draws the runner from its tail to its nose', () => {
+    const { first, last } = arcEnds(model, 0);
+    // Tail: seatDepth/2 + rear overhang behind centre; nose: + front overhang ahead
+    expect(first[0]).toBeCloseTo(-(8 + 12) * 4, 3);
+    expect(last[0]).toBeCloseTo((8 + 8) * 4, 3);
+    // Both ends are above the floor (SVG y negative)
+    expect(first[1]).toBeLessThan(0);
+    expect(last[1]).toBeLessThan(0);
+  });
+
+  it('puts the runner tail on the floor when the chair has rolled back to it', () => {
+    const { first } = arcEnds(model, -model.runnerRearAngle);
+    expect(first[1]).toBeCloseTo(0, 3);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Falling over                                                      */
+/* ------------------------------------------------------------------ */
+describe('falling over', () => {
+  const fallingParams = {
+    radius: 26, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+    chairWeight: 25, sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+  };
+
+  it('draws the chair with the supplied geometry instead of rolling geometry', () => {
+    const m = buildRockerModel(fallingParams);
+    const fall = buildFall(m);
+    const pose = fall.finalPose;
+    const g = renderChairProfile(doc, m, pose.theta, { geom: pose.geom, showDetails: true });
+    const rc = g.querySelector('[data-testid="radius-center"] circle');
+    expect(parseFloat(rc.getAttribute('cx'))).toBeCloseTo(pose.geom.arcCenterX * 4, 3);
+    expect(parseFloat(rc.getAttribute('cy'))).toBeCloseTo(-pose.geom.arcCenterY * 4, 3);
+    // The contact dot stays on the runner tip the chair pivoted on
+    const dot = g.querySelector('[data-testid="contact-point"] circle');
+    expect(parseFloat(dot.getAttribute('cx'))).toBeCloseTo(26 * fall.thetaEnd * 4, 3);
+  });
+
+  it('draws the ejected sitter in their own frame, lifted clear of the floor, saying oof', () => {
+    const m = buildRockerModel(fallingParams);
+    const seated = renderChairProfile(doc, m, 0).querySelector('[data-testid="sitter"]');
+    expect(seated.getAttribute('transform')).toBeNull();
+    expect(seated.querySelector('[data-testid="sitter-say"]')).toBeNull();
+
+    // A sitter lying on their back half-buried in the floor: must be lifted
+    const frame = { theta: Math.PI / 2, arcCenterX: 0, arcCenterY: 20, lift: true, say: 'oof!' };
+    const g = renderChairProfile(doc, m, 0, { sitter: frame });
+    const sitter = g.querySelector('[data-testid="sitter"]');
+    expect(sitter.querySelector('[data-testid="sitter-say"]').textContent).toBe('oof!');
+    const box = profileExtent(sitter);
+    // Nothing of the figure is below the floor (SVG y > 0) once lifted
+    expect(box.maxY).toBeLessThanOrEqual(0.01);
+    // The chair itself is unaffected by the sitter's frame
+    const seat = g.querySelector('[data-testid="centerline"] line');
+    expect(parseFloat(seat.getAttribute('x1'))).toBeCloseTo(0, 3);
+  });
+
+  it('widens the scene to fit the end of the fall and keeps it fixed throughout', () => {
+    const m = buildRockerModel(fallingParams);
+    const fall = buildFall(m);
+    const plain = renderScene(doc, m, 0).getAttribute('viewBox');
+    const vbAt = (t) => {
+      const p = fall.poseAt(t);
+      return renderScene(doc, m, p.theta, { geom: p.geom, sitter: p.sitter, fit: [fall.finalPose] })
+        .getAttribute('viewBox');
+    };
+    expect(vbAt(0)).not.toBe(plain);
+    expect(vbAt(0)).toBe(vbAt(1));
+    expect(vbAt(1)).toBe(vbAt(fall.duration));
+    const [x, , w] = vbAt(0).split(' ').map(Number);
+    const end = renderChairProfile(doc, m, fall.finalPose.theta,
+      { geom: fall.finalPose.geom, sitter: fall.finalPose.sitter });
+    const box = profileExtent(end);
+    expect(box.minX).toBeGreaterThan(x);
+    expect(box.maxX).toBeLessThan(x + w);
+  });
+
+  it('reports the fall in the info panel', () => {
+    const back = renderInfoPanel(doc, buildRockerModel(fallingParams)).textContent;
+    expect(back).toContain('Tips over backward');
+    expect(back).toMatch(/Natural tiltTips over \(back\)/);
+    const fwd = renderInfoPanel(doc, buildRockerModel(
+      { ...fallingParams, seatDepth: 6, backrestAngle: 70, sitterWeight: 190 })).textContent;
+    expect(fwd).toContain('Tips over forward');
+  });
+});
+
+describe('profileExtent', () => {
+  it('covers lines, circles, paths, text and translated groups', () => {
+    const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.innerHTML = '<line x1="-10" y1="0" x2="5" y2="3"/>'
+      + '<circle cx="0" cy="-20" r="4"/>'
+      + '<path d="M1,1L30,-2Z"/>'
+      + '<g transform="translate(0, -100)"><circle cx="0" cy="0" r="1"/></g>'
+      + '<text x="40" y="0" font-size="10">ab</text>';
+    const box = profileExtent(g);
+    expect(box.minX).toBe(-10);
+    expect(box.maxX).toBe(51);
+    expect(box.minY).toBe(-101);
+    expect(box.maxY).toBe(3);
   });
 });

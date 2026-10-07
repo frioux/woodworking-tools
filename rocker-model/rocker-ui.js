@@ -5,7 +5,7 @@
  * Manages animation loop, URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel, POSTURE_PRESETS } from "./rocker-math.js";
+import { buildRockerModel, buildFall, POSTURE_PRESETS } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
@@ -42,6 +42,7 @@ let playing = false;
 let urlTimeout = null;
 let currentTheta = 0;
 let transitionAmplitude = null;
+let currentFall = null; // from buildFall(): the chair is going (or has gone) over
 let showDetails = false; // centre of gravity + plumb line, toggled by tapping the radius centre
 
 /* ------------------------------------------------------------------ */
@@ -186,11 +187,40 @@ function onPopState() {
 /* ------------------------------------------------------------------ */
 
 function renderDiagram(theta) {
-  currentTheta = theta;
+  renderPose({ theta });
+}
+
+/**
+ * Draw the chair in a pose: `theta` alone for a chair on its runners, or
+ * a full pose from buildFall().poseAt() with its own geometry and a
+ * sitter who may be mid-air.  During a fall the picture is sized to fit
+ * the end of the fall so the view does not lurch as the chair goes over.
+ */
+let currentPose = { theta: 0 };
+
+function renderPose(pose) {
+  currentPose = pose;
+  currentTheta = pose.theta;
   const container = document.getElementById("diagram-container");
   container.innerHTML = "";
-  const svg = renderScene(document, currentModel, theta, { showDetails });
+  const svg = renderScene(document, currentModel, pose.theta, {
+    showDetails,
+    geom: pose.geom,
+    sitter: pose.sitter,
+    fit: currentFall ? [currentFall.finalPose] : undefined,
+  });
   container.appendChild(svg);
+}
+
+function fallsOver() {
+  return Boolean(currentModel && currentModel.fallDirection);
+}
+
+function setPlayLabel(label) {
+  const btn = document.getElementById("play-btn");
+  if (btn) {
+    btn.textContent = label;
+  }
 }
 
 /**
@@ -208,7 +238,7 @@ function wireDetailsToggle() {
   const toggle = () => {
     showDetails = !showDetails;
     if (currentModel) {
-      renderDiagram(currentTheta);
+      renderPose(currentPose);
     }
   };
   const isMarker = (target) => target?.closest?.('[data-testid="radius-center"]');
@@ -257,6 +287,19 @@ function animationFrame(timestamp) {
   }
   const elapsed = (timestamp - animationStart) / 1000; // seconds
 
+  if (currentFall) {
+    const pose = currentFall.poseAt(elapsed);
+    renderPose(pose);
+    if (pose.done) {
+      // Leave the wreckage on screen; the button offers a replay
+      playing = false;
+      animationId = null;
+      return;
+    }
+    animationId = requestAnimationFrame(animationFrame);
+    return;
+  }
+
   let theta;
   if (transitionAmplitude !== null && currentModel.stable) {
     const envelope = Math.abs(transitionAmplitude) * Math.exp(-4.0 * elapsed);
@@ -280,38 +323,65 @@ function startAnimation() {
   if (!currentModel) {
     return;
   }
+  if (fallsOver()) {
+    startFall(0);
+    return;
+  }
   transitionAmplitude = null; // regular play uses model's initialAmplitude
   playing = true;
   animationStart = null;
-  const btn = document.getElementById("play-btn");
-  if (btn) {
-    btn.textContent = "Pause";
+  setPlayLabel("Pause");
+  animationId = requestAnimationFrame(animationFrame);
+}
+
+/**
+ * Let the chair fall over, starting from tilt `fromTheta`.  Plays
+ * through to the end on its own; the button then offers a replay.
+ */
+function startFall(fromTheta) {
+  stopAnimation();
+  currentFall = buildFall(currentModel, fromTheta);
+  if (!currentFall) {
+    renderDiagram(currentModel.thetaEq);
+    return;
   }
+  renderPose(currentFall.poseAt(0));
+  playing = true;
+  animationStart = null;
+  setPlayLabel("Replay");
   animationId = requestAnimationFrame(animationFrame);
 }
 
 function stopAnimation() {
   playing = false;
   transitionAmplitude = null;
+  currentFall = null;
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
   }
-  const btn = document.getElementById("play-btn");
-  if (btn) {
-    btn.textContent = "Rock";
+  setPlayLabel(fallsOver() ? "Replay" : "Rock");
+}
+
+/** Show the chair at rest — or, if it cannot rest, falling over. */
+function showAtRest() {
+  if (!currentModel) {
+    return;
+  }
+  if (fallsOver()) {
+    startFall(0);
+  } else {
+    renderDiagram(currentModel.thetaEq);
   }
 }
 
 function restartAnimation() {
   stopAnimation();
-  if (currentModel) {
-    renderDiagram(currentModel.thetaEq);
-  }
+  showAtRest();
 }
 
 function togglePlay() {
-  if (playing) {
+  if (playing && !currentFall) {
     stopAnimation();
   } else {
     startAnimation();
@@ -344,7 +414,10 @@ function update(updateURL = true) {
   });
 
   renderInfo();
-  renderDiagram(currentModel.thetaEq);
+  // Draw a resting (or, for a chair that will fall, level) first frame;
+  // the caller decides how to animate from here.
+  currentFall = null;
+  renderDiagram(fallsOver() ? 0 : currentModel.thetaEq);
 
   if (updateURL) {
     pushURL();
@@ -388,6 +461,14 @@ function animatePostureChange(fromTheta) {
     restartAnimation();
     return;
   }
+  // The chair may have been lying on the floor a moment ago; it can only
+  // start from somewhere on its runners.
+  fromTheta = Math.max(-currentModel.runnerRearAngle,
+    Math.min(currentModel.runnerFrontAngle, fromTheta));
+  if (fallsOver()) {
+    startFall(fromTheta);
+    return;
+  }
   const amplitude = fromTheta - currentModel.thetaEq;
   if (Math.abs(amplitude) < 0.009) {
     restartAnimation();
@@ -399,10 +480,7 @@ function animatePostureChange(fromTheta) {
   transitionAmplitude = amplitude;
   playing = true;
   animationStart = null;
-  const btn = document.getElementById("play-btn");
-  if (btn) {
-    btn.textContent = "Pause";
-  }
+  setPlayLabel("Pause");
   animationId = requestAnimationFrame(animationFrame);
 }
 
@@ -480,8 +558,11 @@ function init() {
   // Browser navigation
   window.addEventListener("popstate", onPopState);
 
-  // Initial render
+  // Initial render — a chair that cannot stand up falls over straight away
   update();
+  if (fallsOver()) {
+    startFall(0);
+  }
 
   // Set initial URL if none
   if (!window.location.search) {

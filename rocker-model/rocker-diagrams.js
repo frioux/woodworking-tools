@@ -5,7 +5,7 @@
  * DOM-agnostic: accepts a `doc` parameter (browser `document` or happy-dom).
  */
 
-import { rockerGeometry } from "./rocker-math.js";
+import { rockerGeometry, localToWorld, runnerExtent, backrestLength } from "./rocker-math.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -43,20 +43,6 @@ function line(doc, x1, y1, x2, y2, stroke, width = 1, dash) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Local-to-world coordinate transform                               */
-/* ------------------------------------------------------------------ */
-
-/**
- * Transform a point from local (chair) frame to world frame.
- * @returns {[number, number]} [worldX, worldY]
- */
-function localToWorld(lx, ly, arcCenterX, arcCenterY, theta) {
-  const wx = arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta);
-  const wy = arcCenterY - lx * Math.sin(theta) + ly * Math.cos(theta);
-  return [wx, wy];
-}
-
-/* ------------------------------------------------------------------ */
 /*  Stick figure renderer                                             */
 /* ------------------------------------------------------------------ */
 
@@ -90,19 +76,37 @@ const POSES = {
  * All geometry is computed in the local (chair) frame and then rotated
  * into the world frame by θ, just like the rest of the chair.
  *
+ * Normally the figure is drawn in the chair's frame (`theta`, `geom`).
+ * When the sitter has been thrown out of the chair, `frame` gives the
+ * figure its own frame instead: the same local coordinates placed by a
+ * different origin and rotation, so the pose is kept while the body
+ * tumbles as one piece.
+ *
  * @param {object} doc
  * @param {object} model  – from buildRockerModel()
  * @param {number} theta  – current tilt angle (rad)
  * @param {object} geom   – from rockerGeometry()
+ * @param {object} [frame] – {theta, arcCenterX, arcCenterY, lift, say}
+ *   lift: raise the whole figure so nothing pokes through the floor
+ *   say:  a short word drawn beside the head
  * @returns {SVGGElement}
  */
-function renderStickFigure(doc, model, theta, geom) {
+function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   const { radius, seatHeight, seatDepth, backrestAngle,
           sitterGender, sitterHeight, posture: postureKey } = model;
-  const { arcCenterX, arcCenterY } = geom;
+  const theta = frame ? frame.theta : chairTheta;
+  const arcCenterX = frame ? frame.arcCenterX : geom.arcCenterX;
+  const arcCenterY = frame ? frame.arcCenterY : geom.arcCenterY;
   const pose = POSES[postureKey] || POSES.neutral;
   const s = SCALE;
-  const g = svgEl(doc, "g");
+  const g = svgEl(doc, "g", { "data-testid": "sitter" });
+  // Every world point drawn, so the figure can be lifted clear of the floor
+  const drawn = [];
+  const toWorld = (lx, ly) => {
+    const w = localToWorld(lx, ly, arcCenterX, arcCenterY, theta);
+    drawn.push(w);
+    return w;
+  };
 
   // Seat surface in local frame (top of seat plank)
   const seatThickness = 1;
@@ -265,8 +269,7 @@ function renderStickFigure(doc, model, theta, geom) {
 
   let triPath = "";
   for (let i = 0; i < triLocal.length; i++) {
-    const [wx, wy] = localToWorld(triLocal[i][0], triLocal[i][1],
-                                   arcCenterX, arcCenterY, theta);
+    const [wx, wy] = toWorld(triLocal[i][0], triLocal[i][1]);
     triPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
   }
   triPath += "Z";
@@ -280,8 +283,7 @@ function renderStickFigure(doc, model, theta, geom) {
   }));
 
   // --- Head ---
-  const [headWX, headWY] = localToWorld(headLX, headLY,
-                                         arcCenterX, arcCenterY, theta);
+  const [headWX, headWY] = toWorld(headLX, headLY);
   g.appendChild(svgEl(doc, "circle", {
     cx: headWX * s,
     cy: -headWY * s,
@@ -293,30 +295,25 @@ function renderStickFigure(doc, model, theta, geom) {
   }));
 
   // --- Neck (shoulder to head base) ---
-  const [shoulderWX, shoulderWY] = localToWorld(shoulderLX, shoulderLY,
-                                                 arcCenterX, arcCenterY, theta);
+  const [shoulderWX, shoulderWY] = toWorld(shoulderLX, shoulderLY);
   const neckBaseLX = shoulderLX - headR * 0.3 * Math.sin(leanRad);
   const neckBaseLY = shoulderLY + headR * 0.3 * Math.cos(leanRad);
-  const [neckWX, neckWY] = localToWorld(neckBaseLX, neckBaseLY,
-                                         arcCenterX, arcCenterY, theta);
+  const [neckWX, neckWY] = toWorld(neckBaseLX, neckBaseLY);
   g.appendChild(line(doc, shoulderWX * s, -shoulderWY * s,
                           neckWX * s, -neckWY * s, COLOR_PERSON, 2));
 
   // --- Upper legs (hips to knees, along the seat) ---
-  const [hipWX, hipWY] = localToWorld(hipLX, hipLY,
-                                       arcCenterX, arcCenterY, theta);
-  const [kneeWX, kneeWY] = localToWorld(kneeLX, kneeLY,
-                                         arcCenterX, arcCenterY, theta);
+  const [hipWX, hipWY] = toWorld(hipLX, hipLY);
+  const [kneeWX, kneeWY] = toWorld(kneeLX, kneeLY);
   g.appendChild(line(doc, hipWX * s, -hipWY * s,
                           kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
 
   // --- Lower legs (knee to foot, length proportional to sitter height) ---
-  let [footWX, footWY] = localToWorld(footLX, footLY,
-                                       arcCenterX, arcCenterY, theta);
+  let [footWX, footWY] = toWorld(footLX, footLY);
   // Clamp foot to the floor — tall sitters (or low seats) can put the foot
   // below world Y = 0.  Intersect the lower-leg segment with y = 0 so the
   // foot touches but never crosses the floor line.
-  if (footWY < 0) {
+  if (footWY < 0 && !frame?.lift) {
     if (kneeWY > 0) {
       const t = kneeWY / (kneeWY - footWY);
       footWX = kneeWX + t * (footWX - kneeWX);
@@ -353,19 +350,39 @@ function renderStickFigure(doc, model, theta, geom) {
     handLX = hipLX + (kneeLX - hipLX) * 0.75;
     handLY = seatSurfaceY + 1;
   }
-  const [elbowWX, elbowWY] = localToWorld(elbowLX, elbowLY,
-                                           arcCenterX, arcCenterY, theta);
+  const [elbowWX, elbowWY] = toWorld(elbowLX, elbowLY);
   const upperArmLine = line(doc, shoulderWX * s, -shoulderWY * s,
                                  elbowWX * s, -elbowWY * s, COLOR_PERSON, 2);
   upperArmLine.setAttribute("data-testid", "stick-upper-arm");
   g.appendChild(upperArmLine);
 
-  const [handWX, handWY] = localToWorld(handLX, handLY,
-                                         arcCenterX, arcCenterY, theta);
+  const [handWX, handWY] = toWorld(handLX, handLY);
   const forearmLine = line(doc, elbowWX * s, -elbowWY * s,
                                 handWX * s, -handWY * s, COLOR_PERSON, 2);
   forearmLine.setAttribute("data-testid", "stick-forearm");
   g.appendChild(forearmLine);
+
+  // --- Thrown clear: keep the heap on top of the floor, and complain ---
+  if (frame?.lift) {
+    // Lowest drawn point, allowing for the head's radius
+    const lowest = Math.min(...drawn.map(([, wy]) => wy), headWY - headR);
+    if (lowest < 0) {
+      g.setAttribute("transform", `translate(0, ${lowest * s})`);
+    }
+  }
+  if (frame?.say) {
+    const say = svgEl(doc, "text", {
+      x: headWX * s + headR * s + 4,
+      y: -headWY * s - headR * s,
+      "font-size": 12,
+      "font-weight": "bold",
+      fill: COLOR_PERSON,
+      "font-family": "sans-serif",
+      "data-testid": "sitter-say",
+    });
+    say.textContent = frame.say;
+    g.appendChild(say);
+  }
 
   return g;
 }
@@ -388,30 +405,38 @@ function renderStickFigure(doc, model, theta, geom) {
  * @param {object}  [options]
  * @param {boolean} [options.showDetails=false] – also draw the centre of
  *   gravity and its plumb line (toggled by tapping the radius centre)
+ * @param {object}  [options.geom] – chair geometry to draw instead of the
+ *   rolling geometry for `theta` (used while the chair is falling over,
+ *   see buildFall())
+ * @param {object}  [options.sitter] – draw the sitter in their own frame
+ *   instead of in the chair (see renderStickFigure())
  * @returns {SVGGElement}
  */
 export function renderChairProfile(doc, model, theta, options = {}) {
-  const { showDetails = false } = options;
+  const { showDetails = false, sitter = null } = options;
   const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
           cogOffsetX = 0, sitterHeight = 68 } = model;
   const g = svgEl(doc, "g");
 
-  const geom = rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
+  const geom = options.geom
+    || rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
   const { contactX, cogX, cogY, arcCenterX, arcCenterY } = geom;
 
   const s = SCALE;
 
   // --- Rocker arc (the curved runner) ---
-  // Draw a generous portion of the arc so rolling on the floor is visible.
-  // The physical rocker spans ±arcAngle from the body bottom.  The body
-  // bottom is at world-frame angle −θ from vertical (CW rotation).
-  const arcAngle = Math.PI / 3.2;
+  // The runner is a real length of wood: it runs from the rear overhang
+  // to the front overhang (see runnerExtent()).  In the world frame the
+  // body bottom sits at angle −θ from vertical (CW rotation), so a point
+  // at local angle `a` along the runner is drawn at a − θ.
+  const runnerRear = model.runnerRearAngle ?? runnerExtent(radius, seatDepth).rearAngle;
+  const runnerFront = model.runnerFrontAngle ?? runnerExtent(radius, seatDepth).frontAngle;
   const arcGroup = svgEl(doc, "g");
 
   const steps = 40;
   let pathD = "";
   for (let i = 0; i <= steps; i++) {
-    const a = -theta - arcAngle + (2 * arcAngle * i) / steps;
+    const a = -theta - runnerRear + ((runnerRear + runnerFront) * i) / steps;
     const px = (arcCenterX + radius * Math.sin(a)) * s;
     const py = (arcCenterY - radius * Math.cos(a)) * s;
     pathD += (i === 0 ? "M" : "L") + `${px},${-py}`;
@@ -584,16 +609,9 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   // In the local frame the seat is horizontal, so the angle from the +x axis
   // (pointing forward) to the backrest direction equals the backrestAngle directly.
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
-  const sittingHtLocal = sitterHeight * 0.52;
-  // The stick figure's hip sits on the seat surface (seatThickness above
-  // the backrest base).  The head is a circle whose vertical top extends
-  // headR above its centre.  Solve for the backH that makes the backrest
-  // line's vertical extent reach at least the head-circle top.
-  const seatThickness = 1;               // matches renderStickFigure
-  const torsoLen = sittingHtLocal * 0.38;
-  const headR    = sittingHtLocal * 0.07;
-  const backH = torsoLen + 3 * headR
-              + (seatThickness + headR) / Math.sin(backAngleRad);
+  // Long enough that the backrest reaches past the top of the sitter's
+  // head (see backrestLength()).
+  const backH = backrestLength(sitterHeight, backrestAngle);
   const localBaseX = -seatHalfLen;
   const localBaseY = legTopLocalY;
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);
@@ -609,7 +627,7 @@ export function renderChairProfile(doc, model, theta, options = {}) {
     backTopWX * s, -backTopWY * s, COLOR_BACK, 3));
 
   // --- Stick figure (sitter) ---
-  g.appendChild(renderStickFigure(doc, model, theta, geom));
+  g.appendChild(renderStickFigure(doc, model, theta, geom, sitter));
 
   // --- Centre of gravity marker (details only) ---
   // Combined chair + sitter centre of gravity.  At rest it sits plumb
@@ -676,12 +694,66 @@ const VIEW_TOP = 64;          // above the floor
 const VIEW_BELOW_FLOOR = 6;   // floor shown below the contact line
 
 /**
+ * Bounding box of everything drawn in a profile group, in SVG units.
+ * Text width is estimated from its length and font size.  Only the
+ * `translate(x, y)` transforms this module emits are understood.
+ *
+ * @param {Element} el
+ * @returns {{minX: number, maxX: number, minY: number, maxY: number}}
+ */
+export function profileExtent(el) {
+  const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  const add = (x, y, dx, dy) => {
+    box.minX = Math.min(box.minX, x + dx);
+    box.maxX = Math.max(box.maxX, x + dx);
+    box.minY = Math.min(box.minY, y + dy);
+    box.maxY = Math.max(box.maxY, y + dy);
+  };
+  const num = (node, name) => parseFloat(node.getAttribute(name)) || 0;
+  const walk = (node, dx, dy) => {
+    const t = node.getAttribute?.("transform");
+    const m = t && /translate\(\s*([-\d.e]+)[\s,]+([-\d.e]+)\s*\)/.exec(t);
+    if (m) {
+      dx += parseFloat(m[1]);
+      dy += parseFloat(m[2]);
+    }
+    const tag = node.tagName?.toLowerCase();
+    if (tag === "line") {
+      add(num(node, "x1"), num(node, "y1"), dx, dy);
+      add(num(node, "x2"), num(node, "y2"), dx, dy);
+    } else if (tag === "circle") {
+      const r = num(node, "r");
+      add(num(node, "cx") - r, num(node, "cy") - r, dx, dy);
+      add(num(node, "cx") + r, num(node, "cy") + r, dx, dy);
+    } else if (tag === "path") {
+      const nums = (node.getAttribute("d") || "").match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) || [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        add(parseFloat(nums[i]), parseFloat(nums[i + 1]), dx, dy);
+      }
+    } else if (tag === "text") {
+      const size = num(node, "font-size") || 10;
+      const width = 0.55 * size * (node.textContent || "").length;
+      add(num(node, "x"), num(node, "y") - size, dx, dy);
+      add(num(node, "x") + width, num(node, "y"), dx, dy);
+    }
+    for (const child of Array.from(node.children || [])) {
+      walk(child, dx, dy);
+    }
+  };
+  walk(el, 0, 0);
+  return box;
+}
+
+/**
  * Render the complete scene SVG at a given tilt angle.
  *
  * @param {object} doc
  * @param {object} model   – from buildRockerModel()
  * @param {number} theta   – tilt angle (rad)
- * @param {object} [options] – see renderChairProfile()
+ * @param {object} [options] – see renderChairProfile(), plus:
+ * @param {object[]} [options.fit] – extra poses ({theta, geom, sitter})
+ *   that must also fit in the picture, e.g. the end of a fall, so the
+ *   view does not change while the chair is going over
  * @returns {SVGSVGElement}
  */
 export function renderScene(doc, model, theta, options = {}) {
@@ -692,11 +764,20 @@ export function renderScene(doc, model, theta, options = {}) {
   const sittingHt = (model.sitterHeight || 68) * 0.52;
   const personTop = seatHeight + sittingHt * 0.6 + 4;
   // Keep the rocker's radius centre in view for large radii.
-  const top = Math.max(VIEW_TOP, personTop, radius + 6);
+  let top = Math.max(VIEW_TOP, personTop, radius + 6);
+  let halfWidth = VIEW_HALF_WIDTH;
+  for (const pose of options.fit || []) {
+    const g = renderChairProfile(doc, model, pose.theta,
+      { showDetails: options.showDetails, geom: pose.geom, sitter: pose.sitter });
+    const box = profileExtent(g);
+    const margin = 6;
+    halfWidth = Math.max(halfWidth, Math.abs(box.minX) / s + margin, Math.abs(box.maxX) / s + margin);
+    top = Math.max(top, -box.minY / s + margin);
+  }
 
-  const vbX = -VIEW_HALF_WIDTH * s;
+  const vbX = -halfWidth * s;
   const vbY = -top * s;
-  const vbW = 2 * VIEW_HALF_WIDTH * s;
+  const vbW = 2 * halfWidth * s;
   const vbH = (top + VIEW_BELOW_FLOOR) * s;
 
   const svg = svgEl(doc, "svg", {
@@ -738,19 +819,29 @@ export function renderInfoPanel(doc, model) {
   const tiltDir = model.thetaEq > 0.001 ? " (fwd)"
                 : model.thetaEq < -0.001 ? " (back)" : "";
 
+  const falls = model.fallDirection || 0;
+  const fallWord = falls > 0 ? "forward" : "backward";
+  let stability = "Stable";
+  if (!model.stable) {
+    stability = `Unstable — CoG above rocker centre, tips over ${fallWord}`;
+  } else if (falls) {
+    stability = `Tips over ${fallWord} — CoG past the end of the runners`;
+  }
+  const upright = model.stable && !falls;
+
   const items = [
-    ["Natural tilt", `${thetaEqDeg}°${tiltDir}`],
+    ["Natural tilt", falls ? `Tips over (${falls > 0 ? "fwd" : "back"})` : `${thetaEqDeg}°${tiltDir}`],
     ["Effective pendulum length", `${model.lEff.toFixed(1)} in`],
-    ["Natural period", model.stable ? `${model.period.toFixed(2)} s` : "Unstable"],
-    ["Rocks per minute", model.stable ? `${(60 / model.period).toFixed(1)}` : "—"],
-    ["Seat swing", model.stable
+    ["Natural period", upright ? `${model.period.toFixed(2)} s` : (model.stable ? "—" : "Unstable")],
+    ["Rocks per minute", upright ? `${(60 / model.period).toFixed(1)}` : "—"],
+    ["Seat swing", upright
       ? `± ${(model.seatHeight * model.initialAmplitude).toFixed(1)} in`
       : "—"],
     ["System CoG above floor", `${model.cogHeight.toFixed(1)} in`],
     ["CoG fore/aft offset", `${(model.cogOffsetX || 0).toFixed(1)} in`],
     ["Gap (R − CoG)", `${(model.radius - model.cogHeight).toFixed(1)} in`],
     ["Damping ratio", model.damping.toFixed(3)],
-    ["Stability", model.stable ? "Stable" : "Unstable — CoG above rocker centre"],
+    ["Stability", stability],
   ];
 
   for (const [label, value] of items) {
@@ -759,7 +850,7 @@ export function renderInfoPanel(doc, model) {
     dl.appendChild(dt);
     const dd = doc.createElement("dd");
     dd.textContent = value;
-    if (!model.stable && label === "Stability") {
+    if (!upright && label === "Stability") {
       dd.style.color = "#cc3333";
       dd.style.fontWeight = "bold";
     }

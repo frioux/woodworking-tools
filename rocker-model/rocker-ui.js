@@ -196,6 +196,12 @@ function renderDiagram(theta) {
 /**
  * Tapping the rocker radius centre toggles the extra details.  The SVG
  * is rebuilt every frame, so listen on the container and delegate.
+ *
+ * Use pointerdown rather than click: a click only fires if the press and
+ * release land on the same element, and while the animation is running
+ * the element under the pointer is replaced many times a second, so
+ * clicks were lost mid-rock.  pointerdown fires immediately on whatever
+ * is there at the moment of the press.
  */
 function wireDetailsToggle() {
   const container = document.getElementById("diagram-container");
@@ -205,14 +211,27 @@ function wireDetailsToggle() {
       renderDiagram(currentTheta);
     }
   };
-  container.addEventListener("click", (e) => {
-    if (e.target.closest?.('[data-testid="radius-center"]')) {
-      toggle();
-    }
-  });
+  const isMarker = (target) => target?.closest?.('[data-testid="radius-center"]');
+  if (window.PointerEvent) {
+    container.addEventListener("pointerdown", (e) => {
+      // Primary button / first touch only
+      if (e.button !== 0 || !e.isPrimary) {
+        return;
+      }
+      if (isMarker(e.target)) {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  } else {
+    container.addEventListener("click", (e) => {
+      if (isMarker(e.target)) {
+        toggle();
+      }
+    });
+  }
   container.addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.key === " ")
-        && e.target.closest?.('[data-testid="radius-center"]')) {
+    if ((e.key === "Enter" || e.key === " ") && isMarker(e.target)) {
       e.preventDefault();
       toggle();
     }

@@ -131,6 +131,33 @@ describe('renderChairProfile', () => {
     expect(backrestTop).toBeLessThanOrEqual(headTop);
   });
 
+  it('sitter leans back further as the backrest reclines', () => {
+    // The torso should rest against the backrest, so a more reclined
+    // backrest moves the head further aft (more negative SVG x) and the
+    // head must stay in front of (not behind) the backrest line.
+    const headX = (backrestAngle) => {
+      const m = buildRockerModel({ ...defaults, backrestAngle });
+      const g = renderChairProfile(doc, m, 0);
+      const head = g.querySelector('[data-testid="stick-head"]');
+      return parseFloat(head.getAttribute('cx'));
+    };
+    const x90 = headX(90);
+    const x100 = headX(100);
+    const x120 = headX(120);
+    expect(x100).toBeLessThan(x90 - 1);
+    expect(x120).toBeLessThan(x100 - 1);
+
+    // At 90° the backrest is vertical at the rear seat edge; the head
+    // (including its radius) must sit in front of it.
+    const m90 = buildRockerModel({ ...defaults, backrestAngle: 90 });
+    const g90 = renderChairProfile(doc, m90, 0);
+    const head90 = g90.querySelector('[data-testid="stick-head"]');
+    const cx = parseFloat(head90.getAttribute('cx'));
+    const r = parseFloat(head90.getAttribute('r'));
+    const backrestX = -(defaults.seatDepth / 2) * 4; // SCALE = 4
+    expect(cx - r).toBeGreaterThanOrEqual(backrestX - 0.01);
+  });
+
   it('foot does not clip through the floor for a tall sitter', () => {
     // 84" sitter on a standard chair: without clamping the foot would go
     // below world Y = 0 (the floor).  The lower-leg line's y2 must be >= 0

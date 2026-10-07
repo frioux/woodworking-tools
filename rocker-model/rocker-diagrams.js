@@ -108,11 +108,13 @@ function renderStickFigure(doc, model, theta, geom) {
   // deep seat), the sitter can still lean back unsupported up to this cap.
   const maxLeanRad = Math.PI / 4;
 
-  // Hip position: start at the base of the backrest.  If the sitter's
-  // thighs are shorter than the seat depth, scoot forward so the knees
-  // always project past the front seat edge (prevents the lower leg from
-  // visually intersecting the seat plank).
-  let hipLX = -seatHalfLen;
+  // Hip position: the hip joint sits roughly mid-body, so place it half a
+  // torso width forward of the backrest base — that puts the *back* of
+  // the body at the backrest rather than the hip joint itself.  If the
+  // sitter's thighs are shorter than the seat depth, scoot forward so the
+  // knees always project past the front seat edge (prevents the lower leg
+  // from visually intersecting the seat plank).
+  let hipLX = -seatHalfLen + torsoHalfW;
   const hipLY = seatSurfaceY;
 
   // Knee: thigh length forward from hip, at seat surface level
@@ -131,8 +133,11 @@ function renderStickFigure(doc, model, theta, geom) {
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
   const backBaseX = -seatHalfLen;
   const backBaseY = seatHeight - radius;
-  const backNormX = -Math.sin(backAngleRad);
-  const backNormY = Math.cos(backAngleRad);
+  // Unit normal to the backrest line pointing toward the *front* of the
+  // chair.  The backrest direction is (cos a, sin a) for a > 90° it runs
+  // up-and-back, so the forward normal is (sin a, −cos a).
+  const backNormX = Math.sin(backAngleRad);
+  const backNormY = -Math.cos(backAngleRad);
 
   const postureAtLean = (lean) => {
     const shoulderX = hipLX - torsoLen * Math.sin(lean);

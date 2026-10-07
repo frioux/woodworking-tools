@@ -38,14 +38,24 @@ describe('renderChairProfile', () => {
   });
 
   it('contains circle elements for CoG and contact point', () => {
-    const g = renderChairProfile(doc, model, 0);
+    const g = renderChairProfile(doc, model, 0, { showDetails: true });
     const circles = g.querySelectorAll('circle');
     // CoG + contact = 2
     expect(circles.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('hides the centre of gravity until details are requested', () => {
+    const plain = renderChairProfile(doc, model, 0);
+    expect(plain.querySelector('[data-testid="cog"]')).toBeNull();
+    expect(plain.querySelector('[data-testid="radius-center"]').getAttribute('aria-pressed')).toBe('false');
+
+    const detailed = renderChairProfile(doc, model, 0, { showDetails: true });
+    expect(detailed.querySelector('[data-testid="cog"]')).toBeTruthy();
+    expect(detailed.querySelector('[data-testid="radius-center"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('labels the centre of gravity in full', () => {
-    const g = renderChairProfile(doc, model, 0);
+    const g = renderChairProfile(doc, model, 0, { showDetails: true });
     const texts = g.querySelectorAll('text');
     const cogText = Array.from(texts).find(t => t.textContent === 'Center of gravity');
     expect(cogText).toBeTruthy();
@@ -63,7 +73,7 @@ describe('renderChairProfile', () => {
   });
 
   it('drops a plumb line from the centre of gravity to the floor', () => {
-    const g = renderChairProfile(doc, model, 0.1);
+    const g = renderChairProfile(doc, model, 0.1, { showDetails: true });
     const cog = g.querySelector('[data-testid="cog"]');
     const plumb = cog.querySelector('line');
     const circle = cog.querySelector('circle');
@@ -448,6 +458,11 @@ describe('renderScene', () => {
     const svg = renderScene(doc, model, 0);
     const groups = svg.querySelectorAll('g');
     expect(groups.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('passes the details option through to the chair profile', () => {
+    expect(renderScene(doc, model, 0).querySelector('[data-testid="cog"]')).toBeNull();
+    expect(renderScene(doc, model, 0, { showDetails: true }).querySelector('[data-testid="cog"]')).toBeTruthy();
   });
 });
 

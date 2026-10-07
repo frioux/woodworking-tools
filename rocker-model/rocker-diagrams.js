@@ -385,9 +385,13 @@ function renderStickFigure(doc, model, theta, geom) {
  * @param {object}  doc
  * @param {object}  model  – from buildRockerModel()
  * @param {number}  theta  – current tilt angle (rad)
+ * @param {object}  [options]
+ * @param {boolean} [options.showDetails=false] – also draw the centre of
+ *   gravity and its plumb line (toggled by tapping the radius centre)
  * @returns {SVGGElement}
  */
-export function renderChairProfile(doc, model, theta) {
+export function renderChairProfile(doc, model, theta, options = {}) {
+  const { showDetails = false } = options;
   const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
           cogOffsetX = 0, sitterHeight = 68 } = model;
   const g = svgEl(doc, "g");
@@ -431,7 +435,26 @@ export function renderChairProfile(doc, model, theta) {
   // on a flat floor it always sits directly above the contact point at
   // height R, so the dashed radius line is the chair's current "plumb"
   // reference — an important part of drafting the curve against the seat.
-  const rc = svgEl(doc, "g", { "data-testid": "radius-center" });
+  // Tapping the marker toggles the extra details (centre of gravity).
+  const rc = svgEl(doc, "g", {
+    "data-testid": "radius-center",
+    role: "button",
+    tabindex: 0,
+    "aria-pressed": showDetails ? "true" : "false",
+    "aria-label": showDetails ? "Hide centre of gravity" : "Show centre of gravity",
+    style: "cursor: pointer",
+  });
+  const rcTitle = svgEl(doc, "title");
+  rcTitle.textContent = showDetails ? "Tap to hide details" : "Tap to show details";
+  rc.appendChild(rcTitle);
+  // Generous invisible hit target around the marker for touch
+  rc.appendChild(svgEl(doc, "circle", {
+    cx: arcCenterX * s,
+    cy: -arcCenterY * s,
+    r: 16,
+    fill: "transparent",
+    "data-testid": "radius-center-hit",
+  }));
   rc.appendChild(line(doc, arcCenterX * s, -arcCenterY * s, contactX * s, 0,
     COLOR_ROCKER, 1, "6 4"));
   const crossLen = 2 * s;
@@ -456,6 +479,16 @@ export function renderChairProfile(doc, model, theta) {
   });
   rcLabel.textContent = `Rocker radius center (R = ${radius} in)`;
   rc.appendChild(rcLabel);
+  const rcHint = svgEl(doc, "text", {
+    x: arcCenterX * s + 10,
+    y: -arcCenterY * s + 6,
+    "font-size": 8,
+    fill: COLOR_ROCKER,
+    opacity: 0.65,
+    "font-family": "sans-serif",
+  });
+  rcHint.textContent = showDetails ? "tap to hide details" : "tap for details";
+  rc.appendChild(rcHint);
   g.appendChild(rc);
 
   // --- Legs ---
@@ -536,36 +569,39 @@ export function renderChairProfile(doc, model, theta) {
   // --- Stick figure (sitter) ---
   g.appendChild(renderStickFigure(doc, model, theta, geom));
 
-  // --- Centre of gravity marker ---
+  // --- Centre of gravity marker (details only) ---
   // Combined chair + sitter centre of gravity.  At rest it sits plumb
   // over the rocker contact point; while rocking the plumb line lands
   // fore or aft of the contact, which is what rolls the chair back.
-  const cog = svgEl(doc, "g", { "data-testid": "cog" });
-  cog.appendChild(line(doc, cogX * s, -cogY * s, cogX * s, 0, COLOR_COG, 1, "3 3"));
-  cog.appendChild(svgEl(doc, "circle", {
-    cx: cogX * s,
-    cy: -cogY * s,
-    r: 4,
-    fill: COLOR_COG,
-    opacity: 0.8,
-  }));
-  // Keep the CoG and radius-centre labels apart when the two points are
-  // close together (small radius): whichever point is lower gets its
-  // label below-right, the upper one above-right.
-  const labelGap = Math.abs(cogY - arcCenterY);
-  const cogLabelBelow = labelGap < 6 && cogY <= arcCenterY;
-  const cogLabel = svgEl(doc, "text", {
-    x: cogX * s + 8,
-    y: cogLabelBelow ? -cogY * s + 14 : -cogY * s - 8,
-    "font-size": 10,
-    fill: COLOR_COG,
-    "font-family": "sans-serif",
-  });
-  cogLabel.textContent = "Center of gravity";
-  cog.appendChild(cogLabel);
-  g.appendChild(cog);
-  if (labelGap < 6 && cogY > arcCenterY) {
-    rcLabel.setAttribute("y", -arcCenterY * s + 14);
+  if (showDetails) {
+    const cog = svgEl(doc, "g", { "data-testid": "cog" });
+    cog.appendChild(line(doc, cogX * s, -cogY * s, cogX * s, 0, COLOR_COG, 1, "3 3"));
+    cog.appendChild(svgEl(doc, "circle", {
+      cx: cogX * s,
+      cy: -cogY * s,
+      r: 4,
+      fill: COLOR_COG,
+      opacity: 0.8,
+    }));
+    // Keep the CoG and radius-centre labels apart when the two points are
+    // close together (small radius): whichever point is lower gets its
+    // label below-right, the upper one above-right.
+    const labelGap = Math.abs(cogY - arcCenterY);
+    const cogLabelBelow = labelGap < 6 && cogY <= arcCenterY;
+    const cogLabel = svgEl(doc, "text", {
+      x: cogX * s + 8,
+      y: cogLabelBelow ? -cogY * s + 14 : -cogY * s - 8,
+      "font-size": 10,
+      fill: COLOR_COG,
+      "font-family": "sans-serif",
+    });
+    cogLabel.textContent = "Center of gravity";
+    cog.appendChild(cogLabel);
+    g.appendChild(cog);
+    if (labelGap < 6 && cogY > arcCenterY) {
+      rcLabel.setAttribute("y", -arcCenterY * s + 14);
+      rcHint.setAttribute("y", -arcCenterY * s + 24);
+  }
   }
 
   // --- Contact point marker ---
@@ -611,9 +647,10 @@ const VIEW_BELOW_FLOOR = 6;   // floor shown below the contact line
  * @param {object} doc
  * @param {object} model   – from buildRockerModel()
  * @param {number} theta   – tilt angle (rad)
+ * @param {object} [options] – see renderChairProfile()
  * @returns {SVGSVGElement}
  */
-export function renderScene(doc, model, theta) {
+export function renderScene(doc, model, theta, options = {}) {
   const { radius, seatHeight } = model;
   const s = SCALE;
 
@@ -639,7 +676,7 @@ export function renderScene(doc, model, theta) {
   svg.appendChild(line(doc, vbX, 0, vbX + vbW, 0, COLOR_FLOOR, 2));
 
   // Chair profile
-  svg.appendChild(renderChairProfile(doc, model, theta));
+  svg.appendChild(renderChairProfile(doc, model, theta, options));
 
   return svg;
 }

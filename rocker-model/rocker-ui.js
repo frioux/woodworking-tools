@@ -42,6 +42,7 @@ let playing = false;
 let urlTimeout = null;
 let currentTheta = 0;
 let transitionAmplitude = null;
+let showDetails = false; // centre of gravity + plumb line, toggled by tapping the radius centre
 
 /* ------------------------------------------------------------------ */
 /*  Input helpers                                                     */
@@ -188,8 +189,34 @@ function renderDiagram(theta) {
   currentTheta = theta;
   const container = document.getElementById("diagram-container");
   container.innerHTML = "";
-  const svg = renderScene(document, currentModel, theta);
+  const svg = renderScene(document, currentModel, theta, { showDetails });
   container.appendChild(svg);
+}
+
+/**
+ * Tapping the rocker radius centre toggles the extra details.  The SVG
+ * is rebuilt every frame, so listen on the container and delegate.
+ */
+function wireDetailsToggle() {
+  const container = document.getElementById("diagram-container");
+  const toggle = () => {
+    showDetails = !showDetails;
+    if (currentModel) {
+      renderDiagram(currentTheta);
+    }
+  };
+  container.addEventListener("click", (e) => {
+    if (e.target.closest?.('[data-testid="radius-center"]')) {
+      toggle();
+    }
+  });
+  container.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ")
+        && e.target.closest?.('[data-testid="radius-center"]')) {
+      e.preventDefault();
+      toggle();
+    }
+  });
 }
 
 function renderInfo() {
@@ -421,6 +448,7 @@ function init() {
   }
 
   wireSteppers();
+  wireDetailsToggle();
 
   document.getElementById("sitter-height").addEventListener("input", updateHeightDisplay);
 

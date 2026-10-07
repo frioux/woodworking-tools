@@ -82,7 +82,8 @@ export function sitterMass(weightLb) {
  * @param {number} seatHeight   – seat height when level (in)
  * @param {number} cogAboveSeat – sitter CoG above seat surface (in)
  * @param {number} cogOffsetX   – CoG fore/aft offset from seat centre (in)
- * @returns {number} equilibrium tilt angle (rad, positive = backward lean)
+ * @returns {number} equilibrium tilt angle (rad, positive = tilted forward,
+ *   i.e. the chair rolls toward a CoG that sits ahead of seat centre)
  */
 export function equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX) {
   const localCogY = seatHeight - radius + cogAboveSeat;
@@ -106,7 +107,7 @@ export function equilibriumAngle(radius, seatHeight, cogAboveSeat, cogOffsetX) {
  * @param {number} seatHeight   – seat height when level (in)
  * @param {number} seatDepth    – seat depth to backrest (in)
  * @param {number} cogAboveSeat – sitter CoG above seat (in)
- * @param {number} theta        – tilt angle (rad, positive = backward)
+ * @param {number} theta        – tilt angle (rad, positive = tilted forward)
  * @param {number} [cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
  * @returns {{contactX: number, seatX: number, seatY: number,
  *            cogX: number, cogY: number, arcCenterX: number,
@@ -116,7 +117,9 @@ export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, thet
   // For a circle of radius R rolling without slipping on a flat floor:
   //   - contact point shifts by R·θ along floor
   //   - arc centre is always at height R, directly above the contact point
-  //   - the chair body rotates clockwise by θ (positive θ = lean back)
+  //   - the chair body rotates clockwise by θ (positive θ = tilted forward:
+  //     the contact point rolls forward along the floor and the backrest
+  //     stands up; negative θ rocks the chair back)
 
   const contactX = radius * theta;                       // floor contact
   const arcCenterX = contactX;                           // directly above contact
@@ -127,7 +130,7 @@ export function rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, thet
   // the arc centre.  The backrest / CoG offset along the seat is at
   // local-x = -seatDepth/2  (backward from seat midpoint).
 
-  // Rotate local frame by θ clockwise (positive θ = lean back):
+  // Rotate local frame by θ clockwise (positive θ = tilted forward):
   const localSeatX = 0;
   const localSeatY = seatHeight - radius;
   const seatX = arcCenterX + localSeatX * Math.cos(theta) + localSeatY * Math.sin(theta);

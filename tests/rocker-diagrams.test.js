@@ -532,6 +532,19 @@ describe('renderInfoPanel', () => {
     expect(text).toContain('Natural tilt');
   });
 
+  it('reports the natural tilt direction to match the drawing', () => {
+    // A CoG well ahead of seat centre rolls the chair forward (positive
+    // θ in rockerGeometry); well behind rolls it back.
+    const fwd = buildRockerModel({ ...defaults, cogOffsetX: 6 });
+    expect(fwd.thetaEq).toBeGreaterThan(0);
+    expect(renderInfoPanel(doc, fwd).textContent).toMatch(/Natural tilt[^°]*°\s*\(fwd\)/);
+    const back = buildRockerModel({ ...defaults, cogOffsetX: -6 });
+    expect(back.thetaEq).toBeLessThan(0);
+    expect(renderInfoPanel(doc, back).textContent).toMatch(/Natural tilt[^°]*°\s*\(back\)/);
+    // The magnitude is shown unsigned; the word carries the direction
+    expect(renderInfoPanel(doc, back).textContent).toMatch(/Natural tilt\d+\.\d°/);
+  });
+
   it('includes CoG fore/aft offset info', () => {
     const dl = renderInfoPanel(doc, model);
     const text = dl.textContent;

@@ -724,10 +724,12 @@ export function renderInfoPanel(doc, model) {
   dl.className = "rocker-info";
 
   const thetaEqDeg = model.thetaEq !== undefined && model.thetaEq !== null
-    ? (model.thetaEq * 180 / Math.PI).toFixed(1)
+    ? Math.abs(model.thetaEq * 180 / Math.PI).toFixed(1)
     : "0.0";
-  const tiltDir = model.thetaEq > 0.001 ? " (back)"
-                : model.thetaEq < -0.001 ? " (fwd)" : "";
+  // Positive θ rocks the chair forward (see rockerGeometry); show the
+  // magnitude with a direction word rather than a signed angle.
+  const tiltDir = model.thetaEq > 0.001 ? " (fwd)"
+                : model.thetaEq < -0.001 ? " (back)" : "";
 
   const items = [
     ["Natural tilt", `${thetaEqDeg}°${tiltDir}`],

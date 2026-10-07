@@ -485,6 +485,16 @@ export function renderChairProfile(doc, model, theta) {
 /*  Full scene (floor + chair + info)                                 */
 /* ------------------------------------------------------------------ */
 
+// Fixed viewport, in inches.  The drawing scale must not jump around as
+// the radius (or anything else) is adjusted, otherwise the diagram's
+// rendered height changes and the data table below it moves.  The view
+// only grows beyond these bounds when something would otherwise be
+// clipped (a very tall sitter or a radius whose centre would be off the
+// top of the picture).
+const VIEW_HALF_WIDTH = 48;   // either side of the level contact point
+const VIEW_TOP = 64;          // above the floor
+const VIEW_BELOW_FLOOR = 6;   // floor shown below the contact line
+
 /**
  * Render the complete scene SVG at a given tilt angle.
  *
@@ -494,22 +504,19 @@ export function renderChairProfile(doc, model, theta) {
  * @returns {SVGSVGElement}
  */
 export function renderScene(doc, model, theta) {
-  const { radius, seatHeight, cogAboveSeat } = model;
+  const { radius, seatHeight } = model;
   const s = SCALE;
 
-  // Viewport: generous padding around the chair.
-  // Use the taller of (CoG + margin) or (person top + margin) so the
-  // full stick figure is never clipped, even when a heavy chair pulls
-  // the system CoG well below the sitter's head.
+  // Top of the sitter's head when sitting upright, plus a margin.
   const sittingHt = (model.sitterHeight || 68) * 0.52;
-  const totalHeight = seatHeight + Math.max(cogAboveSeat + 10, sittingHt * 0.6 + 3);
-  const halfWidth = radius * 0.7 + 10;
-  const padTop = 10;
-  const padBottom = 5;
-  const vbX = -halfWidth * s;
-  const vbY = -(totalHeight + padTop) * s;
-  const vbW = 2 * halfWidth * s;
-  const vbH = (totalHeight + padTop + padBottom) * s;
+  const personTop = seatHeight + sittingHt * 0.6 + 4;
+  // Keep the rocker's radius centre in view for large radii.
+  const top = Math.max(VIEW_TOP, personTop, radius + 6);
+
+  const vbX = -VIEW_HALF_WIDTH * s;
+  const vbY = -top * s;
+  const vbW = 2 * VIEW_HALF_WIDTH * s;
+  const vbH = (top + VIEW_BELOW_FLOOR) * s;
 
   const svg = svgEl(doc, "svg", {
     viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`,

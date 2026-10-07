@@ -328,6 +328,28 @@ describe('renderScene', () => {
     expect(svg.getAttribute('data-testid')).toBe('rocker-scene');
   });
 
+  it('keeps the same viewBox when the radius changes', () => {
+    // The image size must stay static as the radius is adjusted so the
+    // data table below the diagram does not jump around.
+    const vb = (radius) =>
+      renderScene(doc, buildRockerModel({ ...defaults, radius }), 0).getAttribute('viewBox');
+    expect(vb(30)).toBe(vb(42));
+    expect(vb(42)).toBe(vb(55));
+  });
+
+  it('keeps the same viewBox at different tilt angles', () => {
+    const vb0 = renderScene(doc, model, 0).getAttribute('viewBox');
+    const vb1 = renderScene(doc, model, 0.2).getAttribute('viewBox');
+    expect(vb0).toBe(vb1);
+  });
+
+  it('grows the viewBox to keep a very large radius centre in view', () => {
+    const big = buildRockerModel({ ...defaults, radius: 90, seatHeight: 17 });
+    const vb = renderScene(doc, big, 0).getAttribute('viewBox').split(' ').map(Number);
+    // vbY is -top * SCALE; top must be above the arc centre at y = radius.
+    expect(-vb[1] / 4).toBeGreaterThan(90);
+  });
+
   it('contains a floor line', () => {
     const svg = renderScene(doc, model, 0);
     const lines = svg.querySelectorAll('line');

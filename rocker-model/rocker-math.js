@@ -11,41 +11,301 @@
 const GRAVITY = 386.09; // in/s² (standard gravity in inches)
 
 /* ------------------------------------------------------------------ */
-/*  Posture presets — CoG fore/aft offset from seat centre (inches)   */
+/*  Sitter: posture, skeleton and centre of gravity                   */
 /* ------------------------------------------------------------------ */
 
 /**
- * Predefined posture offsets.  Positive = toward front of chair,
- * negative = toward backrest.  Values are rough biomechanical estimates.
+ * What the sitter does with their upper body.  Postures combine: any
+ * torso posture goes with any leg posture (below), and the centre of
+ * gravity falls out of the resulting figure rather than from a table of
+ * offsets.
+ *
+ *   hipShift – inches the hips slide forward on the seat
+ *   lean     – torso lean from vertical (rad, +back / −forward), or null
+ *              to rest the torso against the backrest
+ *   arms     – "lap" (hands in lap), "knees" (elbows on knees) or
+ *              "behindHead" (hands clasped behind the head)
  */
-export const POSTURE_PRESETS = {
-  neutral:        { label: "Neutral",         cogOffsetX:  0 },
-  leaningForward: { label: "Leaning forward", cogOffsetX:  4 },
-  legsForward:    { label: "Legs forward",    cogOffsetX:  2 },
-  armsBack:       { label: "Arms back",       cogOffsetX: -2 },
-  reclined:       { label: "Reclined",        cogOffsetX: -4 },
+export const TORSO_POSTURES = {
+  upright:        { label: "Upright",           hipShift: 0, lean: null,  arms: "lap" },
+  leaningForward: { label: "Leaning forward",   hipShift: 1, lean: -0.35, arms: "knees" },
+  armsBack:       { label: "Arms behind head",  hipShift: 0, lean: null,  arms: "behindHead" },
+  slouched:       { label: "Slouched",          hipShift: 3, lean: null,  arms: "lap" },
 };
 
-/* ------------------------------------------------------------------ */
-/*  Sitter centre-of-gravity estimation                               */
-/* ------------------------------------------------------------------ */
+/**
+ * What the sitter does with their legs: the angle the shin makes with
+ * the vertical (rad, + feet ahead of the knees).  The feet go to the
+ * floor if they can reach it; see sitterPose().
+ */
+export const LEG_POSTURES = {
+  tucked: { label: "Feet tucked", shankAngle: -0.2 },
+  flat:   { label: "Feet flat",   shankAngle: 0.1 },
+  out:    { label: "Legs out",    shankAngle: 0.75 },
+};
+
+// Thickness of the seat plank: the sitter sits this far above the seat line.
+export const SEAT_THICKNESS = 1;
 
 /**
- * Estimate sitter centre-of-gravity height above the seat surface.
- *
- * Uses a simple biomechanical model:
- *   – Seated CoG height ≈ 0.30 × sitting-height for males,
- *     ≈ 0.29 × sitting-height for females (slightly lower torso ratio).
- *   – Sitting height ≈ 0.52 × stature.
- *
- * @param {number} heightIn  – sitter standing height (inches)
- * @param {"male"|"female"} gender
- * @returns {number} CoG height above the seat surface (inches)
+ * Skeleton proportions.  Limb lengths are fractions of standing height;
+ * trunk, neck and head are fractions of sitting height (0.52 × stature).
+ *   hipRise – hip joint above the seat surface (sitting on the flesh)
+ *   trunk   – hip joint to shoulder
+ *   neck    – shoulder to the centre of the head
+ *   headR   – head radius
+ *   halfW   – half the width of the drawn torso
+ * The shank runs from the knee to the sole of the foot, so it includes
+ * the ankle: with the thigh level it is the popliteal height.
  */
-export function sitterCogAboveSeat(heightIn, gender) {
-  const sittingHeight = heightIn * 0.52;
-  const ratio = gender === "female" ? 0.29 : 0.30;
-  return sittingHeight * ratio;
+const BODY = {
+  male:   { thigh: 0.245, shank: 0.285, upperArm: 0.186, forearm: 0.20,
+            hipRise: 0.07, trunk: 0.64, neck: 0.18, headR: 0.10, halfW: 0.08 },
+  female: { thigh: 0.240, shank: 0.275, upperArm: 0.180, forearm: 0.19,
+            hipRise: 0.07, trunk: 0.64, neck: 0.18, headR: 0.10, halfW: 0.085 },
+};
+
+/**
+ * Share of body weight in each segment (de Leva 1996).  Limb segments
+ * are per side; the forearm includes the hand.
+ */
+const SEGMENT_MASS = {
+  male:   { head: 0.0694, trunk: 0.4346, upperArm: 0.0271, forearm: 0.0223,
+            thigh: 0.1416, shank: 0.0433, foot: 0.0137 },
+  female: { head: 0.0668, trunk: 0.4257, upperArm: 0.0255, forearm: 0.0194,
+            thigh: 0.1478, shank: 0.0481, foot: 0.0129 },
+};
+
+// Where along each segment (from its upper joint) its mass centres.
+const SEGMENT_COM = { trunk: 0.5, upperArm: 0.577, forearm: 0.68, thigh: 0.433, shank: 0.433 };
+
+// The knees can come up this far (low seat) or drop this far below the
+// hips (legs stretched out past a tall seat) before the feet give up
+// and slide or dangle instead.
+const MAX_KNEE_UP = (60 * Math.PI) / 180;
+const MAX_KNEE_DOWN = (25 * Math.PI) / 180;
+// A thigh lifted more than this is no longer resting on the seat.
+const THIGH_LIFT_ANGLE = (10 * Math.PI) / 180;
+// An unsupported torso leans back at most this far.
+const MAX_LEAN = Math.PI / 4;
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * Work out how the sitter sits: joint positions, where the centre of
+ * gravity lands, and how much of their weight the feet take.
+ *
+ * Coordinates are seat-relative inches: origin at the seat centre on
+ * the seat line, x forward, y up.  The floor is at y = −seatHeight.
+ *
+ * Legs: the shin keeps its length.  Starting from the thigh level on
+ * the seat and the shin at its posture's angle, the knee rises (low
+ * seat) or drops (tall seat, legs out) until the foot meets the floor.
+ * A knee cannot rise past MAX_KNEE_UP — beyond that the feet slide
+ * forward instead — nor drop past MAX_KNEE_DOWN, beyond which the feet
+ * dangle.
+ *
+ * Feet on the floor carry the shins and feet, plus most of the thighs
+ * once those lift off the seat, which pitches the chair back.
+ *
+ * @param {object} p
+ * @param {number} p.sitterHeight    – standing height (in)
+ * @param {"male"|"female"} p.sitterGender
+ * @param {number} p.seatHeight      – seat line above the floor (in)
+ * @param {number} p.seatDepth       – seat depth (in)
+ * @param {number} [p.backrestAngle=100] – degrees from the seat
+ * @param {string} [p.torsoPosture="upright"] – key of TORSO_POSTURES
+ * @param {string} [p.legPosture="flat"]      – key of LEG_POSTURES
+ * @returns {object} pose:
+ *   joints  – {hip, knee, foot, shoulder, neckBase, head, headBack, elbow, hand}
+ *             as [x, y]
+ *   torso   – [[x, y] × 3] the drawn torso outline
+ *   headR, lean, thighAngle, shankAngle, feetOnFloor
+ *   cog     – {x, y} centre of gravity of the sitter
+ *   footLoadFraction – share of body weight carried by the feet
+ */
+export function sitterPose(p) {
+  const { sitterHeight, sitterGender, seatHeight, seatDepth, backrestAngle = 100,
+          torsoPosture = "upright", legPosture = "flat" } = p;
+  const sex = sitterGender === "female" ? "female" : "male";
+  const body = BODY[sex];
+  const mass = SEGMENT_MASS[sex];
+  const torso = TORSO_POSTURES[torsoPosture] || TORSO_POSTURES.upright;
+  const legs = LEG_POSTURES[legPosture] || LEG_POSTURES.flat;
+
+  const H = sitterHeight;
+  const S = H * 0.52;
+  const thighLen = H * body.thigh;
+  const shankLen = H * body.shank;
+  const upperArmLen = H * body.upperArm;
+  const hipRise = S * body.hipRise;
+  const trunkLen = S * body.trunk;
+  const neckLen = S * body.neck;
+  const headR = S * body.headR;
+  const halfW = S * body.halfW;
+
+  const seatHalf = seatDepth / 2;
+  const surfaceY = SEAT_THICKNESS;
+  const floorY = -seatHeight;
+  const hipY = surfaceY + hipRise;
+
+  // --- Legs: shin length fixed, knee finds the floor ---
+  let shankAngle = legs.shankAngle;
+  const kneeAboveFloorLevel = hipY - floorY; // knee height with the thigh level
+  let thighAngle = Math.asin(clamp((shankLen * Math.cos(shankAngle) - kneeAboveFloorLevel) / thighLen, -1, 1));
+  let feetOnFloor = true;
+  if (thighAngle > MAX_KNEE_UP) {
+    // Knees as high as they go: the feet slide forward along the floor
+    thighAngle = MAX_KNEE_UP;
+    const kneeAboveFloor = kneeAboveFloorLevel + thighLen * Math.sin(thighAngle);
+    shankAngle = Math.acos(clamp(kneeAboveFloor / shankLen, -1, 1));
+  } else if (thighAngle < -MAX_KNEE_DOWN) {
+    // Even with the knees dropped the feet cannot reach: they dangle
+    thighAngle = -MAX_KNEE_DOWN;
+    feetOnFloor = false;
+  }
+
+  // Hip: far enough ahead of the backrest base that the back of the
+  // body (and the back of the head, above it) meets the backrest, slid
+  // forward if need be so the knees clear the front edge of the seat
+  // (otherwise the shins would pass through the plank), then slid
+  // further by the posture.
+  const thighReach = thighLen * Math.cos(thighAngle);
+  const hipX = Math.max(-seatHalf + Math.max(halfW, headR), seatHalf - thighReach) + torso.hipShift;
+  const kneeX = hipX + thighReach;
+  const kneeY = hipY + thighLen * Math.sin(thighAngle);
+  const footX = kneeX + shankLen * Math.sin(shankAngle);
+  const footY = feetOnFloor ? floorY : kneeY - shankLen * Math.cos(shankAngle);
+
+  // --- Torso: lean against the backrest, or as the posture says ---
+  const backRad = (backrestAngle * Math.PI) / 180;
+  const backBase = [-seatHalf, 0];
+  // Unit normal to the backrest line pointing toward the front of the chair
+  const backNorm = [Math.sin(backRad), -Math.cos(backRad)];
+  const clearance = (x, y) => (x - backBase[0]) * backNorm[0] + (y - backBase[1]) * backNorm[1];
+
+  const torsoAt = (lean) => {
+    const sx = hipX - trunkLen * Math.sin(lean);
+    const sy = hipY + trunkLen * Math.cos(lean);
+    const hx = sx - neckLen * Math.sin(lean);
+    const hy = sy + neckLen * Math.cos(lean);
+    // Across the shoulders, perpendicular to the trunk
+    const px = -Math.cos(lean);
+    const py = -Math.sin(lean);
+    const outline = sex === "female"
+      ? [[sx, sy], [hipX + px * halfW, hipY + py * halfW], [hipX - px * halfW, hipY - py * halfW]]
+      : [[sx + px * halfW, sy + py * halfW], [sx - px * halfW, sy - py * halfW], [hipX, hipY]];
+    return {
+      shoulder: [sx, sy],
+      head: [hx, hy],
+      headBack: [hx - headR * Math.cos(lean), hy - headR * Math.sin(lean)],
+      outline,
+    };
+  };
+  const minClearance = (lean) => {
+    const t = torsoAt(lean);
+    return Math.min(clearance(...t.shoulder), clearance(...t.head), clearance(...t.headBack),
+                    ...t.outline.map(([x, y]) => clearance(x, y)));
+  };
+
+  let lean = 0;
+  if (torso.lean !== null) {
+    lean = torso.lean;
+  } else {
+    // Rest against the backrest: the lean that brings the body closest
+    // to the backrest without crossing it.  If the backrest is out of
+    // reach, lean back unsupported as far as MAX_LEAN.
+    let best = Infinity;
+    const steps = 180;
+    for (let i = 0; i <= steps; i++) {
+      const candidate = (MAX_LEAN * i) / steps;
+      const d = minClearance(candidate);
+      if (d < -1e-6) {
+        continue;
+      }
+      if (d < best - 1e-6 || (Math.abs(d - best) <= 1e-6 && candidate > lean)) {
+        best = d;
+        lean = candidate;
+        if (best <= 1e-4) {
+          break;
+        }
+      }
+    }
+  }
+  const { shoulder, head, headBack, outline } = torsoAt(lean);
+  const neckBase = [shoulder[0] - headR * 0.3 * Math.sin(lean), shoulder[1] + headR * 0.3 * Math.cos(lean)];
+
+  // --- Arms ---
+  let elbow;
+  let hand;
+  if (torso.arms === "knees") {
+    // Elbows resting near the knees, hands hanging past them
+    elbow = [kneeX - 2, kneeY + 3];
+    hand = [kneeX + 2, kneeY - 1];
+  } else if (torso.arms === "behindHead") {
+    // Elbows up and back beside the head, hands clasped behind it.  In
+    // side view the elbows (which really splay sideways) are kept just
+    // in front of the backrest rather than drawn through it.
+    elbow = [shoulder[0] - upperArmLen * 0.4, shoulder[1] + upperArmLen * 0.55];
+    const behind = clearance(...elbow);
+    if (behind < 0) {
+      elbow = [elbow[0] - behind * backNorm[0], elbow[1] - behind * backNorm[1]];
+    }
+    hand = headBack;
+  } else {
+    // Hands in lap: upper arm hanging a little forward of vertical,
+    // forearm down to the thigh
+    elbow = [shoulder[0] + upperArmLen * Math.sin(0.25), shoulder[1] - upperArmLen * Math.cos(0.25)];
+    hand = [hipX + (kneeX - hipX) * 0.7, hipY + (kneeY - hipY) * 0.7 + 1];
+  }
+
+  // --- Centre of gravity from the segment masses ---
+  const along = ([ax, ay], [bx, by], f) => [ax + (bx - ax) * f, ay + (by - ay) * f];
+  const hip = [hipX, hipY];
+  const knee = [kneeX, kneeY];
+  const foot = [footX, footY];
+  const parts = [
+    [mass.head, head],
+    [mass.trunk, along(hip, shoulder, SEGMENT_COM.trunk)],
+    [2 * mass.upperArm, along(shoulder, elbow, SEGMENT_COM.upperArm)],
+    [2 * mass.forearm, along(elbow, hand, SEGMENT_COM.forearm)],
+    [2 * mass.thigh, along(hip, knee, SEGMENT_COM.thigh)],
+    [2 * mass.shank, along(knee, foot, SEGMENT_COM.shank)],
+    [2 * mass.foot, foot],
+  ];
+  let cogX = 0;
+  let cogY = 0;
+  let total = 0;
+  for (const [m, [x, y]] of parts) {
+    cogX += m * x;
+    cogY += m * y;
+    total += m;
+  }
+  cogX /= total;
+  cogY /= total;
+
+  // --- Weight through the feet ---
+  // Shins and feet stand on the floor.  A thigh resting on the seat
+  // (level, or draped over its front edge) puts its weight into the
+  // seat; once the knees come up it lifts off and the knee end of it
+  // goes down the shin to the floor.
+  let footLoadFraction = 0;
+  if (feetOnFloor) {
+    const lift = clamp(thighAngle / THIGH_LIFT_ANGLE, 0, 1);
+    footLoadFraction = 2 * (mass.shank + mass.foot + lift * SEGMENT_COM.thigh * mass.thigh);
+  }
+
+  return {
+    joints: { hip, knee, foot, shoulder, neckBase, head, headBack, elbow, hand },
+    torso: outline,
+    headR,
+    lean,
+    thighAngle,
+    shankAngle,
+    feetOnFloor,
+    cog: { x: cogX, y: cogY },
+    footLoadFraction,
+  };
 }
 
 /**
@@ -301,11 +561,10 @@ export function tippedGeometry(radius, seatHeight, cogAboveSeat, cogLocalX, thet
  */
 export function backrestLength(sitterHeight, backrestAngle) {
   const a = ((backrestAngle || 100) * Math.PI) / 180;
-  const sittingHt = sitterHeight * 0.52;
-  const seatThickness = 1;
-  const torsoLen = sittingHt * 0.38;
-  const headR = sittingHt * 0.07;
-  return torsoLen + 3 * headR + (seatThickness + headR) / Math.sin(a);
+  const S = sitterHeight * 0.52;
+  const body = BODY.male;
+  const headTop = S * (body.hipRise + body.trunk + body.neck + body.headR);
+  return headTop + (SEAT_THICKNESS + S * body.headR) / Math.sin(a);
 }
 
 /* ------------------------------------------------------------------ */
@@ -494,27 +753,43 @@ export function systemCogOffsetX(sitterWeight, sitterOffsetX, chairWeight, chair
  *   puts the contact point behind the seat centre: the chair sits further
  *   forward on its circle, the rear legs grow and the front legs shrink
  *   (see legLengths()).
- * @param {number} [params.cogOffsetX=0] – CoG fore/aft offset from seat centre (in)
- * @param {string} [params.posture="neutral"] – posture preset key (see POSTURE_PRESETS);
- *   drives how the sitter is drawn, not the physics (which uses cogOffsetX)
+ * @param {string} [params.torsoPosture="upright"] – key of TORSO_POSTURES
+ * @param {string} [params.legPosture="flat"]      – key of LEG_POSTURES
  * @returns {object} model with derived quantities and a `angleAt(t)` function
  */
 export function buildRockerModel(params) {
   const { radius, seatHeight, seatDepth, backrestAngle = 100,
           sitterWeight, sitterHeight, sitterGender,
-          chairWeight = 0, contactOffset = 0, cogOffsetX = 0, posture = "neutral" } = params;
+          chairWeight = 0, contactOffset = 0,
+          torsoPosture = "upright", legPosture = "flat" } = params;
 
-  // Sitter CoG
-  const sitterCogAbove = sitterCogAboveSeat(sitterHeight, sitterGender);
+  // How the sitter sits, and where that puts their weight
+  const pose = sitterPose({ sitterHeight, sitterGender, seatHeight, seatDepth,
+                            backrestAngle, torsoPosture, legPosture });
+  const sitterCogAbove = pose.cog.y;
   const sitterCogH = seatHeight + sitterCogAbove;
 
   // Chair CoG (estimated from geometry)
   const chairCogH = estimateChairCogHeight(seatHeight);
   const chairCogOffsetX = estimateChairCogOffsetX(seatDepth, backrestAngle);
 
-  // Combined system CoG — used for the rolling-body physics
-  const cogHeight = systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH);
-  const cogOffsetSystemX = systemCogOffsetX(sitterWeight, cogOffsetX, chairWeight, chairCogOffsetX);
+  // Combined system CoG (chair + sitter)
+  const systemH = systemCogHeight(sitterWeight, sitterCogH, chairWeight, chairCogH);
+  const systemX = systemCogOffsetX(sitterWeight, pose.cog.x, chairWeight, chairCogOffsetX);
+
+  // Feet on the floor carry part of the sitter: that weight never
+  // reaches the chair.  What the rocker balances fore and aft is the
+  // load that is left, centred where the whole system's weight minus
+  // the feet's share would balance (worked out with the seat level).
+  // The height of the load, which sets the rocking period and whether
+  // the chair can stand at all, is left as the system's own: the feet
+  // sit on the floor, they do not change how high the mass rides.
+  const totalWeight = sitterWeight + chairWeight;
+  const footLoad = pose.footLoadFraction * sitterWeight;
+  const chairLoad = totalWeight - footLoad;
+  const footX = pose.joints.foot[0];
+  const cogOffsetSystemX = (totalWeight * systemX - footLoad * footX) / chairLoad;
+  const cogHeight = systemH;
   const cogAboveSeat = cogHeight - seatHeight;
   // The physics only cares where the CoG sits relative to the contact
   // point, which is `contactOffset` ahead of the seat centre.
@@ -553,18 +828,27 @@ export function buildRockerModel(params) {
     backrestAngle,
     sitterGender,
     sitterHeight,
-    posture,
+    torsoPosture,
+    legPosture,
+    /** How the sitter sits (see sitterPose()). */
+    pose,
     cogAboveSeat,
     cogHeight,
     chairWeight,
+    sitterWeight,
     contactOffset,
     /** Where the legs are cut off by the circle, seat level (in). */
     legLengths: legLengths(radius, seatHeight, seatDepth, contactOffset),
-    /** System CoG ahead of the seat centre (in). */
+    /** Weight carried by the sitter's feet on the floor (lb). */
+    footLoad,
+    /** Weight the rocker actually balances: chair + sitter − feet (lb). */
+    chairLoad,
+    /** Load centre ahead of the seat centre (in). */
     cogOffsetX: cogOffsetSystemX,
-    /** System CoG ahead of the level contact point (in). */
+    /** Load centre ahead of the level contact point (in). */
     cogLocalX,
-    sitterCogOffsetX: cogOffsetX,
+    /** The sitter's own CoG ahead of the seat centre (in). */
+    sitterCogOffsetX: pose.cog.x,
     chairCogOffsetX,
     lEff,
     period,

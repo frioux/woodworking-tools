@@ -5,7 +5,7 @@
  * DOM-agnostic: accepts a `doc` parameter (browser `document` or happy-dom).
  */
 
-import { rockerGeometry, localToWorld, runnerExtent, backrestLength } from "./rocker-math.js";
+import { rockerGeometry, localToWorld, runnerExtent, backrestLength, sitterPose } from "./rocker-math.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -47,34 +47,18 @@ function line(doc, x1, y1, x2, y2, stroke, width = 1, dash) {
 /* ------------------------------------------------------------------ */
 
 /**
- * How each posture preset is drawn.  The physics only sees the CoG
- * offset; these poses make the figure *look* like it is doing what the
- * preset says.
- *
- *   hipShift – inches the hips slide forward on the seat
- *   lean     – torso lean from vertical (rad, +back / −forward), or null
- *              to rest the torso against the backrest
- *   legAngle – lower-leg angle forward of vertical (rad)
- *   arms     – "lap" (hands in lap), "knees" (elbows on knees) or
- *              "behindHead" (hands clasped behind the head)
- */
-const POSES = {
-  neutral:        { hipShift: 0, lean: null,  legAngle: 0.1,  arms: "lap" },
-  leaningForward: { hipShift: 1, lean: -0.35, legAngle: -0.1, arms: "knees" },
-  legsForward:    { hipShift: 0, lean: null,  legAngle: 0.85, arms: "lap" },
-  armsBack:       { hipShift: 0, lean: null,  legAngle: 0.1,  arms: "behindHead" },
-  reclined:       { hipShift: 3, lean: null,  legAngle: 0.5,  arms: "lap" },
-};
-
-/**
  * Render a stick figure person sitting in the chair.
  *
- * The torso is drawn as a triangle whose orientation depends on gender:
+ * The figure's joints come from sitterPose() in rocker-math.js — the
+ * same skeleton the physics weighs to find the centre of gravity — so
+ * what is drawn is what is balanced.  The torso is a triangle whose
+ * orientation depends on gender:
  *   – Male:   inverted triangle (▽) — wider at shoulders (weight up top)
  *   – Female: upright triangle  (△) — wider at hips (weight lower)
  *
- * All geometry is computed in the local (chair) frame and then rotated
- * into the world frame by θ, just like the rest of the chair.
+ * The pose is in seat-relative coordinates; it is moved into the
+ * chair's local frame and then rotated into the world frame by θ,
+ * just like the rest of the chair.
  *
  * Normally the figure is drawn in the chair's frame (`theta`, `geom`).
  * When the sitter has been thrown out of the chair, `frame` gives the
@@ -92,190 +76,42 @@ const POSES = {
  * @returns {SVGGElement}
  */
 function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
-  const { radius, seatHeight, seatDepth, backrestAngle,
-          sitterGender, sitterHeight, posture: postureKey,
-          contactOffset = 0 } = model;
+  const { radius, seatHeight, contactOffset = 0 } = model;
+  const pose = model.pose || sitterPose(model);
   const theta = frame ? frame.theta : chairTheta;
-  // Seat centre in the chair's local frame (the arc centre is the origin,
-  // the level contact point straight below it)
-  const seatCX = -contactOffset;
   const arcCenterX = frame ? frame.arcCenterX : geom.arcCenterX;
   const arcCenterY = frame ? frame.arcCenterY : geom.arcCenterY;
-  const pose = POSES[postureKey] || POSES.neutral;
   const s = SCALE;
   const g = svgEl(doc, "g", { "data-testid": "sitter" });
   // Every world point drawn, so the figure can be lifted clear of the floor
   const drawn = [];
-  const toWorld = (lx, ly) => {
-    const w = localToWorld(lx, ly, arcCenterX, arcCenterY, theta);
+  // Seat-relative pose coordinates → chair local frame → world
+  const seatCX = -contactOffset;
+  const seatLY = seatHeight - radius;
+  const toWorld = ([x, y]) => {
+    const w = localToWorld(x + seatCX, y + seatLY, arcCenterX, arcCenterY, theta);
     drawn.push(w);
     return w;
   };
-
-  // Seat surface in local frame (top of seat plank)
-  const seatThickness = 1;
-  const seatSurfaceY = seatHeight - radius + seatThickness;
-
-  // Front/back edge of the seat in local frame (actual seat depth)
-  const seatHalfLen = seatDepth / 2;
-
-  // Sitting height and body proportions (all in inches, local frame)
-  const sittingHt = sitterHeight * 0.52;
-  const headR     = sittingHt * 0.07;
-  const torsoLen  = sittingHt * 0.38;
-  const torsoHalfW = sittingHt * 0.08;
-
-  // Leg proportions — typical seated human ratios, gender-differentiated
-  // Thigh (hip to knee, horizontal): ~23% male, ~22% female of standing height
-  // Lower leg (knee to ankle): ~22.5% male, ~21.5% female of standing height
-  const thighLen    = sitterHeight * (sitterGender === "female" ? 0.22 : 0.23);
-  const lowerLegLen = sitterHeight * (sitterGender === "female" ? 0.215 : 0.225);
-
-  // Lean angle: how far the torso tilts back from vertical.
-  // We cap unsupported leaning at 45° and prevent the body from crossing
-  // behind the backrest line. If the backrest is too far away (short sitter,
-  // deep seat), the sitter can still lean back unsupported up to this cap.
-  const maxLeanRad = Math.PI / 4;
-
-  // Hip position: the hip joint sits roughly mid-body, so place it half a
-  // torso width forward of the backrest base — that puts the *back* of
-  // the body at the backrest rather than the hip joint itself.  If the
-  // sitter's thighs are shorter than the seat depth, scoot forward so the
-  // knees always project past the front seat edge (prevents the lower leg
-  // from visually intersecting the seat plank).
-  let hipLX = seatCX - seatHalfLen + torsoHalfW;
-  const hipLY = seatSurfaceY;
-
-  // Knee: thigh length forward from hip, at seat surface level
-  let kneeLX = hipLX + thighLen;
-  if (kneeLX < seatCX + seatHalfLen) {
-    hipLX = seatCX + seatHalfLen - thighLen;
-    kneeLX = seatCX + seatHalfLen;
-  }
-  // Posture: slide the hips (and so the knees) forward on the seat
-  hipLX += pose.hipShift;
-  kneeLX += pose.hipShift;
-  const kneeLY = seatSurfaceY;
-
-  // Foot: lower leg hangs from the knee at the pose's forward angle
-  // (neutral is a slight natural lean of ~6°)
-  const legForwardAngle = pose.legAngle; // radians
-  const footLX = kneeLX + lowerLegLen * Math.sin(legForwardAngle);
-  const footLY = kneeLY - lowerLegLen * Math.cos(legForwardAngle);
-
-  const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
-  const backBaseX = seatCX - seatHalfLen;
-  const backBaseY = seatHeight - radius;
-  // Unit normal to the backrest line pointing toward the *front* of the
-  // chair.  The backrest direction is (cos a, sin a) for a > 90° it runs
-  // up-and-back, so the forward normal is (sin a, −cos a).
-  const backNormX = Math.sin(backAngleRad);
-  const backNormY = -Math.cos(backAngleRad);
-
-  const postureAtLean = (lean) => {
-    const shoulderX = hipLX - torsoLen * Math.sin(lean);
-    const shoulderY = hipLY + torsoLen * Math.cos(lean);
-    const headX = shoulderX - (headR * 2) * Math.sin(lean);
-    const headY = shoulderY + (headR * 2) * Math.cos(lean);
-    // Back-of-head point (furthest aft point of the circle)
-    const headBackX = headX - headR * Math.cos(lean);
-    const headBackY = headY - headR * Math.sin(lean);
-    return {
-      shoulderX, shoulderY, headX, headY, headBackX, headBackY,
-    };
-  };
-
-  const torsoTriangleAtLean = (lean, shoulderX, shoulderY) => {
-    // Perpendicular to torso axis (for triangle width)
-    const tDx = shoulderX - hipLX;
-    const tDy = shoulderY - hipLY;
-    const tLen = Math.sqrt(tDx * tDx + tDy * tDy);
-    const perpX = -tDy / tLen;
-    const perpY = tDx / tLen;
-
-    if (sitterGender === "female") {
-      // △ — wider at hips, narrow at shoulders
-      return [
-        [shoulderX, shoulderY],
-        [hipLX + perpX * torsoHalfW, hipLY + perpY * torsoHalfW],
-        [hipLX - perpX * torsoHalfW, hipLY - perpY * torsoHalfW],
-      ];
+  const stroke = (a, b, testid) => {
+    const [ax, ay] = toWorld(a);
+    const [bx, by] = toWorld(b);
+    const ln = line(doc, ax * s, -ay * s, bx * s, -by * s, COLOR_PERSON, 2);
+    if (testid) {
+      ln.setAttribute("data-testid", testid);
     }
-
-    // ▽ — wider at shoulders, narrow at hips (default / male)
-    return [
-      [shoulderX + perpX * torsoHalfW, shoulderY + perpY * torsoHalfW],
-      [shoulderX - perpX * torsoHalfW, shoulderY - perpY * torsoHalfW],
-      [hipLX, hipLY],
-    ];
+    g.appendChild(ln);
+    return ln;
   };
 
-  // Positive means in front of / on backrest. Negative means behind it.
-  const signedBackrestDistance = (x, y) =>
-    (x - backBaseX) * backNormX + (y - backBaseY) * backNormY;
-
-  const backrestClearanceAtLean = (lean) => {
-    const p = postureAtLean(lean);
-    const torsoTri = torsoTriangleAtLean(lean, p.shoulderX, p.shoulderY);
-    const dists = [
-      signedBackrestDistance(p.shoulderX, p.shoulderY),
-      signedBackrestDistance(p.headX, p.headY),
-      signedBackrestDistance(p.headBackX, p.headBackY),
-      ...torsoTri.map(([x, y]) => signedBackrestDistance(x, y)),
-    ];
-
-    return {
-      clear: dists.every((d) => d >= -1e-6),
-      minDist: Math.min(...dists),
-    };
-  };
-
-  // Resolve a natural lean that keeps the body from crossing the backrest.
-  // Prefer a lean where the back/head are as close as possible to touching
-  // the backrest; if the backrest is unreachable, this naturally settles at
-  // either the best unsupported lean (up to 45°) or upright.
-  let leanRad = 0;
-  if (pose.lean !== null) {
-    // Fixed lean (e.g. leaning forward, away from the backrest)
-    leanRad = pose.lean;
-  } else {
-    let bestDist = Number.POSITIVE_INFINITY;
-    const leanSteps = 180;
-    for (let i = 0; i <= leanSteps; i++) {
-      const lean = (maxLeanRad * i) / leanSteps;
-      const { clear, minDist } = backrestClearanceAtLean(lean);
-      if (!clear) {
-        continue;
-      }
-
-      // Favor the smallest clearance (closest touch). For ties, prefer the
-      // larger lean so an unsupported sitter uses available recline.
-      const distGap = Math.abs(minDist - bestDist);
-      if (minDist < bestDist - 1e-6 || (distGap <= 1e-6 && lean > leanRad)) {
-        bestDist = minDist;
-        leanRad = lean;
-        if (bestDist <= 1e-4) {
-          break;
-        }
-      }
-    }
-  }
-
-  // Final shoulder/head from resolved lean.
-  const posture = postureAtLean(leanRad);
-  const shoulderLX = posture.shoulderX;
-  const shoulderLY = posture.shoulderY;
-  const headLX = posture.headX;
-  const headLY = posture.headY;
+  const { hip, knee, foot, shoulder, neckBase, head, elbow, hand } = pose.joints;
 
   // --- Torso triangle ---
-  const triLocal = torsoTriangleAtLean(leanRad, shoulderLX, shoulderLY);
-
   let triPath = "";
-  for (let i = 0; i < triLocal.length; i++) {
-    const [wx, wy] = toWorld(triLocal[i][0], triLocal[i][1]);
+  pose.torso.forEach((pt, i) => {
+    const [wx, wy] = toWorld(pt);
     triPath += (i === 0 ? "M" : "L") + `${wx * s},${-wy * s}`;
-  }
+  });
   triPath += "Z";
   g.appendChild(svgEl(doc, "path", {
     d: triPath,
@@ -287,11 +123,11 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   }));
 
   // --- Head ---
-  const [headWX, headWY] = toWorld(headLX, headLY);
+  const [headWX, headWY] = toWorld(head);
   g.appendChild(svgEl(doc, "circle", {
     cx: headWX * s,
     cy: -headWY * s,
-    r: headR * s,
+    r: pose.headR * s,
     fill: "none",
     stroke: COLOR_PERSON,
     "stroke-width": 2,
@@ -299,24 +135,18 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   }));
 
   // --- Neck (shoulder to head base) ---
-  const [shoulderWX, shoulderWY] = toWorld(shoulderLX, shoulderLY);
-  const neckBaseLX = shoulderLX - headR * 0.3 * Math.sin(leanRad);
-  const neckBaseLY = shoulderLY + headR * 0.3 * Math.cos(leanRad);
-  const [neckWX, neckWY] = toWorld(neckBaseLX, neckBaseLY);
-  g.appendChild(line(doc, shoulderWX * s, -shoulderWY * s,
-                          neckWX * s, -neckWY * s, COLOR_PERSON, 2));
+  stroke(shoulder, neckBase);
 
-  // --- Upper legs (hips to knees, along the seat) ---
-  const [hipWX, hipWY] = toWorld(hipLX, hipLY);
-  const [kneeWX, kneeWY] = toWorld(kneeLX, kneeLY);
-  g.appendChild(line(doc, hipWX * s, -hipWY * s,
-                          kneeWX * s, -kneeWY * s, COLOR_PERSON, 2));
+  // --- Upper legs (hips to knees) ---
+  stroke(hip, knee, "stick-upper-leg");
 
-  // --- Lower legs (knee to foot, length proportional to sitter height) ---
-  let [footWX, footWY] = toWorld(footLX, footLY);
-  // Clamp foot to the floor — tall sitters (or low seats) can put the foot
-  // below world Y = 0.  Intersect the lower-leg segment with y = 0 so the
-  // foot touches but never crosses the floor line.
+  // --- Lower legs (knee to foot) ---
+  // The pose puts the feet on (or above) the floor with the chair level.
+  // While the chair rocks the feet swing with it; rather than let them
+  // pass through the floor, shorten the drawn shin to where it meets
+  // the floor line.
+  const [kneeWX, kneeWY] = toWorld(knee);
+  let [footWX, footWY] = toWorld(foot);
   if (footWY < 0 && !frame?.lift) {
     if (kneeWY > 0) {
       const t = kneeWY / (kneeWY - footWY);
@@ -329,55 +159,22 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   lowerLegLine.setAttribute("data-testid", "stick-lower-leg");
   g.appendChild(lowerLegLine);
 
-  // --- Arms (elbow and hand positions depend on the pose) ---
-  const upperArmLen = sitterHeight * 0.19;
-  let elbowLX;
-  let elbowLY;
-  let handLX;
-  let handLY;
-  if (pose.arms === "knees") {
-    // Leaning forward: elbows resting near the knees, hands hanging past them
-    elbowLX = kneeLX - 2;
-    elbowLY = seatSurfaceY + 3;
-    handLX = kneeLX + 2;
-    handLY = seatSurfaceY - 1;
-  } else if (pose.arms === "behindHead") {
-    // Arms back: elbows out behind the shoulders, hands at the back of the head
-    elbowLX = shoulderLX - upperArmLen * 0.55;
-    elbowLY = shoulderLY + upperArmLen * 0.45;
-    handLX = posture.headBackX;
-    handLY = posture.headBackY;
-  } else {
-    // Hands in lap: upper arm down toward the lap, forearm to the knees
-    elbowLX = hipLX + seatDepth * 0.15;
-    elbowLY = seatSurfaceY + torsoLen * 0.2;
-    handLX = hipLX + (kneeLX - hipLX) * 0.75;
-    handLY = seatSurfaceY + 1;
-  }
-  const [elbowWX, elbowWY] = toWorld(elbowLX, elbowLY);
-  const upperArmLine = line(doc, shoulderWX * s, -shoulderWY * s,
-                                 elbowWX * s, -elbowWY * s, COLOR_PERSON, 2);
-  upperArmLine.setAttribute("data-testid", "stick-upper-arm");
-  g.appendChild(upperArmLine);
-
-  const [handWX, handWY] = toWorld(handLX, handLY);
-  const forearmLine = line(doc, elbowWX * s, -elbowWY * s,
-                                handWX * s, -handWY * s, COLOR_PERSON, 2);
-  forearmLine.setAttribute("data-testid", "stick-forearm");
-  g.appendChild(forearmLine);
+  // --- Arms ---
+  stroke(shoulder, elbow, "stick-upper-arm");
+  stroke(elbow, hand, "stick-forearm");
 
   // --- Thrown clear: keep the heap on top of the floor, and complain ---
   if (frame?.lift) {
     // Lowest drawn point, allowing for the head's radius
-    const lowest = Math.min(...drawn.map(([, wy]) => wy), headWY - headR);
+    const lowest = Math.min(...drawn.map(([, wy]) => wy), headWY - pose.headR);
     if (lowest < 0) {
       g.setAttribute("transform", `translate(0, ${lowest * s})`);
     }
   }
   if (frame?.say) {
     const say = svgEl(doc, "text", {
-      x: headWX * s + headR * s + 4,
-      y: -headWY * s - headR * s,
+      x: headWX * s + pose.headR * s + 4,
+      y: -headWY * s - pose.headR * s,
       "font-size": 12,
       "font-weight": "bold",
       fill: COLOR_PERSON,
@@ -537,7 +334,14 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   });
   rcHint.textContent = showDetails ? "tap to hide details" : "tap for details";
   rc.appendChild(rcHint);
-  g.appendChild(rc);
+  // The centre often lands on the sitter's body; a pale halo keeps the
+  // text legible and the group is added to the drawing after the sitter.
+  for (const t of rc.querySelectorAll("text")) {
+    t.setAttribute("stroke", "#fffdfb");
+    t.setAttribute("stroke-width", 3);
+    t.setAttribute("stroke-linejoin", "round");
+    t.setAttribute("paint-order", "stroke");
+  }
 
   // --- Legs ---
   // Two legs from the rocker arc up to the seat.  In the local (chair)
@@ -651,6 +455,9 @@ export function renderChairProfile(doc, model, theta, options = {}) {
 
   // --- Stick figure (sitter) ---
   g.appendChild(renderStickFigure(doc, model, theta, geom, sitter));
+
+  // Radius centre marker on top of the sitter, so it can always be tapped
+  g.appendChild(rc);
 
   // --- Centre of gravity marker (details only) ---
   // Combined chair + sitter centre of gravity.  At rest it sits plumb
@@ -785,7 +592,7 @@ export function renderScene(doc, model, theta, options = {}) {
 
   // Top of the sitter's head when sitting upright, plus a margin.
   const sittingHt = (model.sitterHeight || 68) * 0.52;
-  const personTop = seatHeight + sittingHt * 0.6 + 4;
+  const personTop = seatHeight + sittingHt + 4;
   // Keep the rocker's radius centre in view for large radii.
   let top = Math.max(VIEW_TOP, personTop, radius + 6);
   let halfWidth = VIEW_HALF_WIDTH;
@@ -872,6 +679,9 @@ export function renderInfoPanel(doc, model) {
       : "—"],
     ["System CoG above floor", `${model.cogHeight.toFixed(1)} in`],
     ["CoG fore/aft offset", `${(model.cogOffsetX || 0).toFixed(1)} in`],
+    ...(model.footLoad !== undefined ? [
+      ["Feet carry", `${model.footLoad.toFixed(0)} lb (${Math.round(100 * model.footLoad / (model.sitterWeight || 1))}%)`],
+    ] : []),
     ["Gap (R − CoG)", `${(model.radius - model.cogHeight).toFixed(1)} in`],
     ["Damping ratio", model.damping.toFixed(3)],
     ["Stability", stability],

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  sitterCogAboveSeat,
+  sitterPose,
+  TORSO_POSTURES,
+  LEG_POSTURES,
+  SEAT_THICKNESS,
   sitterMass,
   rockerGeometry,
   equilibriumAngle,
@@ -13,7 +16,6 @@ import {
   estimateChairCogOffsetX,
   systemCogOffsetX,
   buildRockerModel,
-  POSTURE_PRESETS,
   runnerExtent,
   fallDirection,
   tippedGeometry,
@@ -26,34 +28,126 @@ import {
 } from '../rocker-model/rocker-math.js';
 
 /* ------------------------------------------------------------------ */
-/*  sitterCogAboveSeat                                                */
+/*  sitterPose                                                        */
 /* ------------------------------------------------------------------ */
-describe('sitterCogAboveSeat', () => {
-  it('returns a positive value for typical inputs', () => {
-    const cog = sitterCogAboveSeat(70, 'male');
-    expect(cog).toBeGreaterThan(0);
+describe('sitterPose', () => {
+  const base = { sitterHeight: 70, sitterGender: 'male', seatHeight: 17, seatDepth: 16, backrestAngle: 100 };
+  const shinLength = (pose) => Math.hypot(pose.joints.foot[0] - pose.joints.knee[0],
+                                          pose.joints.foot[1] - pose.joints.knee[1]);
+
+  it('puts the centre of gravity about 10 in above the seat for a 70-inch male', () => {
+    const { cog } = sitterPose(base);
+    expect(cog.y).toBeGreaterThan(9);
+    expect(cog.y).toBeLessThan(11.5);
   });
 
   it('is proportional to height', () => {
-    const short = sitterCogAboveSeat(60, 'male');
-    const tall = sitterCogAboveSeat(76, 'male');
-    expect(tall).toBeGreaterThan(short);
+    expect(sitterPose({ ...base, sitterHeight: 76 }).cog.y)
+      .toBeGreaterThan(sitterPose({ ...base, sitterHeight: 60 }).cog.y);
   });
 
-  it('returns a lower CoG for female than male at same height', () => {
-    const male = sitterCogAboveSeat(68, 'male');
-    const female = sitterCogAboveSeat(68, 'female');
-    expect(female).toBeLessThan(male);
+  it('gives a female sitter a lower CoG than a male of the same height', () => {
+    expect(sitterPose({ ...base, sitterGender: 'female' }).cog.y).toBeLessThan(sitterPose(base).cog.y);
   });
 
-  it('computes expected value for 70-inch male', () => {
-    // sitting height = 70 * 0.52 = 36.4; CoG = 36.4 * 0.30 = 10.92
-    expect(sitterCogAboveSeat(70, 'male')).toBeCloseTo(10.92);
+  it('sits upright with the thighs about level and the feet on the floor', () => {
+    const pose = sitterPose(base);
+    expect(Math.abs(pose.thighAngle)).toBeLessThan(0.1);
+    expect(pose.feetOnFloor).toBe(true);
+    expect(pose.joints.foot[1]).toBeCloseTo(-17);
+    expect(pose.lean).toBeGreaterThan(0); // resting back against the 100° backrest
   });
 
-  it('computes expected value for 64-inch female', () => {
-    // sitting height = 64 * 0.52 = 33.28; CoG = 33.28 * 0.29 = 9.6512
-    expect(sitterCogAboveSeat(64, 'female')).toBeCloseTo(9.6512);
+  it('keeps the shin the same length whatever the seat height', () => {
+    const lengths = [11, 14, 17, 20, 24].map((seatHeight) => shinLength(sitterPose({ ...base, seatHeight })));
+    for (const l of lengths) {
+      expect(l).toBeCloseTo(lengths[0]);
+    }
+    expect(lengths[0]).toBeCloseTo(70 * 0.285);
+  });
+
+  it('lifts the knees as the seat gets lower', () => {
+    const high = sitterPose({ ...base, seatHeight: 17 });
+    const low = sitterPose({ ...base, seatHeight: 12 });
+    expect(low.thighAngle).toBeGreaterThan(high.thighAngle + 0.2);
+    expect(low.joints.knee[1]).toBeGreaterThan(low.joints.hip[1]);
+    expect(low.feetOnFloor).toBe(true);
+  });
+
+  it('puts more weight through the feet once the knees come up', () => {
+    const high = sitterPose({ ...base, seatHeight: 17 });
+    const low = sitterPose({ ...base, seatHeight: 12 });
+    expect(high.footLoadFraction).toBeGreaterThan(0.08);
+    expect(low.footLoadFraction).toBeGreaterThan(high.footLoadFraction + 0.05);
+  });
+
+  it('lets the feet dangle off a seat too tall to reach the floor from', () => {
+    const pose = sitterPose({ ...base, seatHeight: 26 });
+    expect(pose.feetOnFloor).toBe(false);
+    expect(pose.footLoadFraction).toBe(0);
+    expect(pose.joints.foot[1]).toBeGreaterThan(-26);
+  });
+
+  it('keeps the knees clear of the front edge of the seat', () => {
+    for (const sitterHeight of [58, 64, 70, 78]) {
+      for (const seatDepth of [14, 16, 20]) {
+        const pose = sitterPose({ ...base, sitterHeight, seatDepth });
+        expect(pose.joints.knee[0]).toBeGreaterThanOrEqual(seatDepth / 2 - 1e-9);
+      }
+    }
+  });
+
+  it('moves the weight forward when leaning forward', () => {
+    const upright = sitterPose(base);
+    const forward = sitterPose({ ...base, torsoPosture: 'leaningForward' });
+    expect(forward.cog.x).toBeGreaterThan(upright.cog.x + 3);
+    expect(forward.lean).toBeLessThan(0);
+  });
+
+  it('moves the weight back with the arms behind the head', () => {
+    const upright = sitterPose(base);
+    const arms = sitterPose({ ...base, torsoPosture: 'armsBack' });
+    expect(arms.cog.x).toBeLessThan(upright.cog.x - 0.5);
+    expect(arms.joints.hand[0]).toBeLessThan(arms.joints.shoulder[0]);
+  });
+
+  it('combines a torso posture with a leg posture', () => {
+    const upright = sitterPose(base);
+    const arms = sitterPose({ ...base, torsoPosture: 'armsBack' });
+    const out = sitterPose({ ...base, legPosture: 'out' });
+    const both = sitterPose({ ...base, torsoPosture: 'armsBack', legPosture: 'out' });
+    // Arms where the arms-back pose puts them, feet where legs-out puts them
+    expect(both.joints.hand).toEqual(arms.joints.hand);
+    expect(both.joints.foot[0]).toBeCloseTo(out.joints.foot[0]);
+    expect(out.joints.foot[0]).toBeGreaterThan(upright.joints.foot[0] + 6);
+    // The CoG shifts are roughly additive
+    const armsShift = arms.cog.x - upright.cog.x;
+    const outShift = out.cog.x - upright.cog.x;
+    expect(both.cog.x - upright.cog.x).toBeCloseTo(armsShift + outShift, 0);
+  });
+
+  it('slides the hips forward when slouched', () => {
+    const upright = sitterPose(base);
+    const slouched = sitterPose({ ...base, torsoPosture: 'slouched' });
+    expect(slouched.joints.hip[0]).toBeCloseTo(upright.joints.hip[0] + TORSO_POSTURES.slouched.hipShift);
+  });
+
+  it('falls back to upright and feet flat for unknown postures', () => {
+    expect(sitterPose({ ...base, torsoPosture: 'nope', legPosture: 'nope' }))
+      .toEqual(sitterPose({ ...base, torsoPosture: 'upright', legPosture: 'flat' }));
+  });
+
+  it('has a label for every posture', () => {
+    for (const presets of [TORSO_POSTURES, LEG_POSTURES]) {
+      for (const [, preset] of Object.entries(presets)) {
+        expect(typeof preset.label).toBe('string');
+        expect(preset.label.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('sits on top of the seat plank', () => {
+    expect(sitterPose(base).joints.hip[1]).toBeGreaterThan(SEAT_THICKNESS);
   });
 });
 
@@ -148,29 +242,6 @@ describe('equilibriumAngle', () => {
     const small = Math.abs(equilibriumAngle(42, 17, 10, 1));
     const large = Math.abs(equilibriumAngle(42, 17, 10, 5));
     expect(large).toBeGreaterThan(small);
-  });
-});
-
-/* ------------------------------------------------------------------ */
-/*  POSTURE_PRESETS                                                   */
-/* ------------------------------------------------------------------ */
-describe('POSTURE_PRESETS', () => {
-  it('contains a neutral preset at offset 0', () => {
-    expect(POSTURE_PRESETS.neutral).toBeDefined();
-    expect(POSTURE_PRESETS.neutral.cogOffsetX).toBe(0);
-  });
-
-  it('has a label for each preset', () => {
-    for (const [, preset] of Object.entries(POSTURE_PRESETS)) {
-      expect(typeof preset.label).toBe('string');
-      expect(preset.label.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('has a numeric cogOffsetX for each preset', () => {
-    for (const [, preset] of Object.entries(POSTURE_PRESETS)) {
-      expect(typeof preset.cogOffsetX).toBe('number');
-    }
   });
 });
 
@@ -416,8 +487,7 @@ describe('buildRockerModel', () => {
     const m = buildRockerModel(defaults);
     expect(m.chairWeight).toBe(0);
     // Without chair weight, cogHeight equals sitter-only CoG
-    const sitterCogH = 17 + 70 * 0.52 * 0.30; // seatHeight + cogAboveSeat
-    expect(m.cogHeight).toBeCloseTo(sitterCogH);
+    expect(m.cogHeight).toBeCloseTo(17 + m.pose.cog.y);
   });
 
   it('passes through sitterGender', () => {
@@ -443,30 +513,50 @@ describe('buildRockerModel', () => {
     expect(m.backrestAngle).toBe(100);
   });
 
-  it('defaults sitterCogOffsetX to 0 when omitted', () => {
+  it('takes the sitter CoG from the pose', () => {
     const m = buildRockerModel(defaults);
-    expect(m.sitterCogOffsetX).toBe(0);
+    expect(m.sitterCogOffsetX).toBe(m.pose.cog.x);
+    expect(m.sitterCogAbove).toBe(m.pose.cog.y);
   });
 
   it('tracks both sitter and system CoG offsets', () => {
-    const m = buildRockerModel({ ...defaults, cogOffsetX: 3, chairWeight: 25 });
-    expect(m.sitterCogOffsetX).toBe(3);
-    expect(m.cogOffsetX).toBeLessThan(3);
+    const m = buildRockerModel({ ...defaults, torsoPosture: 'leaningForward', chairWeight: 25 });
+    expect(m.sitterCogOffsetX).toBeGreaterThan(1);
+    expect(m.cogOffsetX).toBeLessThan(m.sitterCogOffsetX);
     expect(m.chairCogOffsetX).toBeLessThan(0);
   });
 
-  it('has thetaEq of 0 with cogOffsetX=0', () => {
-    const m = buildRockerModel(defaults);
+  it('moves the load centre back when the feet carry weight', () => {
+    const m = buildRockerModel({ ...defaults, chairWeight: 25 });
+    expect(m.footLoad).toBeGreaterThan(10);
+    expect(m.chairLoad).toBeCloseTo(170 + 25 - m.footLoad);
+    const noFeet = systemCogOffsetX(170, m.sitterCogOffsetX, 25, m.chairCogOffsetX);
+    expect(m.cogOffsetX).toBeLessThan(noFeet - 0.5);
+    // …but the feet do not change how high the load rides
+    expect(m.cogHeight).toBeCloseTo(systemCogHeight(170, 17 + m.pose.cog.y, 25, estimateChairCogHeight(17)));
+  });
+
+  it('a lower seat puts more on the feet and pitches the chair back', () => {
+    const high = buildRockerModel({ ...defaults, chairWeight: 25, seatHeight: 17 });
+    const low = buildRockerModel({ ...defaults, chairWeight: 25, seatHeight: 13 });
+    expect(low.footLoad).toBeGreaterThan(high.footLoad + 10);
+    expect(low.thetaEq).toBeLessThan(high.thetaEq - 0.05);
+  });
+
+  it('rests level when the contact point is under the load centre', () => {
+    const probe = buildRockerModel(defaults);
+    const m = buildRockerModel({ ...defaults, contactOffset: probe.cogOffsetX });
     expect(m.thetaEq).toBeCloseTo(0);
   });
 
-  it('has non-zero thetaEq with non-zero cogOffsetX', () => {
-    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
-    expect(m.thetaEq).not.toBeCloseTo(0);
+  it('rests tilted when the contact point is away from the load centre', () => {
+    const probe = buildRockerModel(defaults);
+    const m = buildRockerModel({ ...defaults, contactOffset: probe.cogOffsetX - 3 });
+    expect(m.thetaEq).toBeGreaterThan(0.1);
   });
 
   it('oscillates around thetaEq', () => {
-    const m = buildRockerModel({ ...defaults, cogOffsetX: 3 });
+    const m = buildRockerModel({ ...defaults, torsoPosture: 'leaningForward' });
     // At t=0, angle = thetaEq + initialAmplitude
     expect(m.angleAt(0)).toBeCloseTo(m.thetaEq + m.initialAmplitude);
     // After long time, angle should approach thetaEq (damped)
@@ -475,25 +565,30 @@ describe('buildRockerModel', () => {
   });
 });
 
-describe('buildRockerModel posture passthrough', () => {
+describe('buildRockerModel postures', () => {
   const params = {
     radius: 42, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
     sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
   };
 
-  it('defaults posture to neutral', () => {
-    expect(buildRockerModel(params).posture).toBe('neutral');
+  it('defaults to upright with the feet flat', () => {
+    const m = buildRockerModel(params);
+    expect(m.torsoPosture).toBe('upright');
+    expect(m.legPosture).toBe('flat');
   });
 
-  it('carries the posture key through to the model', () => {
-    expect(buildRockerModel({ ...params, posture: 'reclined' }).posture).toBe('reclined');
+  it('carries the posture keys through to the model', () => {
+    const m = buildRockerModel({ ...params, torsoPosture: 'slouched', legPosture: 'out' });
+    expect(m.torsoPosture).toBe('slouched');
+    expect(m.legPosture).toBe('out');
   });
 
-  it('does not let posture alone change the physics', () => {
-    const a = buildRockerModel({ ...params, posture: 'neutral' });
-    const b = buildRockerModel({ ...params, posture: 'legsForward' });
-    expect(b.thetaEq).toBe(a.thetaEq);
-    expect(b.period).toBe(a.period);
+  it('lets the posture change where the chair rests', () => {
+    const upright = buildRockerModel(params);
+    const forward = buildRockerModel({ ...params, torsoPosture: 'leaningForward' });
+    const armsBack = buildRockerModel({ ...params, torsoPosture: 'armsBack' });
+    expect(forward.thetaEq).toBeGreaterThan(upright.thetaEq + 0.1);
+    expect(armsBack.thetaEq).toBeLessThan(upright.thetaEq);
   });
 });
 
@@ -631,8 +726,8 @@ describe('buildRockerModel runner limits', () => {
     expect(m.initialAmplitude).toBe(0);
   });
 
-  it('still rocks at 27 in, one inch away', () => {
-    const m = buildRockerModel({ ...base, radius: 27 });
+  it('still rocks at 26 in once the contact point is moved back under the sitter', () => {
+    const m = buildRockerModel({ ...base, radius: 26, contactOffset: -3 });
     expect(m.fallDirection).toBe(0);
     expect(m.initialAmplitude).toBeGreaterThan(0);
   });
@@ -649,8 +744,8 @@ describe('buildRockerModel runner limits', () => {
   });
 
   it('never swings past the ends of the runners', () => {
-    for (const cogOffsetX of [-4, -2, 0, 2, 4]) {
-      const m = buildRockerModel({ ...base, cogOffsetX });
+    for (const contactOffset of [-6, -4, -2, 0, 2]) {
+      const m = buildRockerModel({ ...base, contactOffset });
       expect(m.fallDirection).toBe(0);
       expect(m.thetaEq + m.initialAmplitude).toBeLessThan(m.runnerFrontAngle);
       expect(m.thetaEq - m.initialAmplitude).toBeGreaterThan(-m.runnerRearAngle);
@@ -659,7 +754,7 @@ describe('buildRockerModel runner limits', () => {
 
   it('exposes the sitter CoG height for the fall simulation', () => {
     const m = buildRockerModel(base);
-    expect(m.sitterCogAbove).toBeCloseTo(sitterCogAboveSeat(70, 'male'));
+    expect(m.sitterCogAbove).toBeCloseTo(m.pose.cog.y);
   });
 });
 
@@ -840,11 +935,13 @@ describe('buildRockerModel contact offset', () => {
   });
 
   it('starts a fall from the shifted seat', () => {
-    const m = buildRockerModel({ ...base, radius: 26, contactOffset: -3 });
-    expect(m.fallDirection).not.toBe(0);
+    // Contact point 3 in ahead of the seat centre on a tight radius: the
+    // load is well behind it and the chair goes over backward
+    const m = buildRockerModel({ ...base, radius: 26, contactOffset: 3 });
+    expect(m.fallDirection).toBe(-1);
     const fall = buildFall(m);
     const p = fall.poseAt(0);
-    // Seat centre sits 3 in ahead of the level contact point
-    expect(p.geom.seatX).toBeCloseTo(3);
+    // Seat centre sits 3 in behind the level contact point
+    expect(p.geom.seatX).toBeCloseTo(-3);
   });
 });

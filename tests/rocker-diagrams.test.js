@@ -269,40 +269,55 @@ describe('renderChairProfile', () => {
 /*  Posture poses                                                     */
 /* ------------------------------------------------------------------ */
 describe('posture poses', () => {
-  const attr = (posture, selector, name) => {
-    const m = buildRockerModel({ ...defaults, posture });
+  const attr = (postures, selector, name) => {
+    const m = buildRockerModel({ ...defaults, ...postures });
     const g = renderChairProfile(doc, m, 0);
     return parseFloat(g.querySelector(selector).getAttribute(name));
   };
 
-  it('legs forward swings the feet forward', () => {
-    const neutralFoot = attr('neutral', '[data-testid="stick-lower-leg"]', 'x2');
-    const forwardFoot = attr('legsForward', '[data-testid="stick-lower-leg"]', 'x2');
+  it('legs out swings the feet forward', () => {
+    const neutralFoot = attr({}, '[data-testid="stick-lower-leg"]', 'x2');
+    const forwardFoot = attr({ legPosture: 'out' }, '[data-testid="stick-lower-leg"]', 'x2');
     expect(forwardFoot).toBeGreaterThan(neutralFoot + 4 * 4); // > 4 inches
   });
 
-  it('leaning forward tips the head forward of the neutral position', () => {
-    const neutralHead = attr('neutral', '[data-testid="stick-head"]', 'cx');
-    const forwardHead = attr('leaningForward', '[data-testid="stick-head"]', 'cx');
+  it('feet tucked pulls the feet back under the knees', () => {
+    const neutralFoot = attr({}, '[data-testid="stick-lower-leg"]', 'x2');
+    const tuckedFoot = attr({ legPosture: 'tucked' }, '[data-testid="stick-lower-leg"]', 'x2');
+    expect(tuckedFoot).toBeLessThan(neutralFoot - 2 * 4);
+  });
+
+  it('leaning forward tips the head forward of the upright position', () => {
+    const neutralHead = attr({}, '[data-testid="stick-head"]', 'cx');
+    const forwardHead = attr({ torsoPosture: 'leaningForward' }, '[data-testid="stick-head"]', 'cx');
     expect(forwardHead).toBeGreaterThan(neutralHead + 4 * 4);
   });
 
   it('arms back puts the hands behind the shoulders', () => {
-    const shoulderX = attr('armsBack', '[data-testid="stick-upper-arm"]', 'x1');
-    const handX = attr('armsBack', '[data-testid="stick-forearm"]', 'x2');
-    const neutralHandX = attr('neutral', '[data-testid="stick-forearm"]', 'x2');
+    const shoulderX = attr({ torsoPosture: 'armsBack' }, '[data-testid="stick-upper-arm"]', 'x1');
+    const handX = attr({ torsoPosture: 'armsBack' }, '[data-testid="stick-forearm"]', 'x2');
+    const neutralHandX = attr({}, '[data-testid="stick-forearm"]', 'x2');
     expect(handX).toBeLessThan(shoulderX);
     expect(neutralHandX).toBeGreaterThan(shoulderX);
   });
 
-  it('reclined slides the hips and knees forward', () => {
-    const neutralKnee = attr('neutral', '[data-testid="stick-lower-leg"]', 'x1');
-    const reclinedKnee = attr('reclined', '[data-testid="stick-lower-leg"]', 'x1');
-    expect(reclinedKnee).toBeCloseTo(neutralKnee + 3 * 4, 5);
+  it('slouched slides the hips and knees forward', () => {
+    const neutralKnee = attr({}, '[data-testid="stick-lower-leg"]', 'x1');
+    const slouchedKnee = attr({ torsoPosture: 'slouched' }, '[data-testid="stick-lower-leg"]', 'x1');
+    expect(slouchedKnee).toBeCloseTo(neutralKnee + 3 * 4, 5);
   });
 
-  it('reclined still keeps the head in front of the backrest', () => {
-    const m = buildRockerModel({ ...defaults, posture: 'reclined', backrestAngle: 90 });
+  it('combines arms back with legs out', () => {
+    const handX = attr({ torsoPosture: 'armsBack', legPosture: 'out' }, '[data-testid="stick-forearm"]', 'x2');
+    const shoulderX = attr({ torsoPosture: 'armsBack', legPosture: 'out' }, '[data-testid="stick-upper-arm"]', 'x1');
+    const footX = attr({ torsoPosture: 'armsBack', legPosture: 'out' }, '[data-testid="stick-lower-leg"]', 'x2');
+    const neutralFoot = attr({}, '[data-testid="stick-lower-leg"]', 'x2');
+    expect(handX).toBeLessThan(shoulderX);
+    expect(footX).toBeGreaterThan(neutralFoot + 4 * 4);
+  });
+
+  it('slouched still keeps the head in front of the backrest', () => {
+    const m = buildRockerModel({ ...defaults, torsoPosture: 'slouched', backrestAngle: 90 });
     const g = renderChairProfile(doc, m, 0);
     const head = g.querySelector('[data-testid="stick-head"]');
     const cx = parseFloat(head.getAttribute('cx'));
@@ -310,10 +325,26 @@ describe('posture poses', () => {
     expect(cx - r).toBeGreaterThanOrEqual(-(defaults.seatDepth / 2) * 4 - 0.1);
   });
 
-  it('unknown or custom postures draw the neutral pose', () => {
-    const neutral = renderChairProfile(doc, buildRockerModel({ ...defaults, posture: 'neutral' }), 0);
-    const custom = renderChairProfile(doc, buildRockerModel({ ...defaults, posture: 'custom' }), 0);
+  it('unknown postures draw the upright, feet-flat pose', () => {
+    const neutral = renderChairProfile(doc, buildRockerModel({ ...defaults, torsoPosture: 'upright', legPosture: 'flat' }), 0);
+    const custom = renderChairProfile(doc, buildRockerModel({ ...defaults, torsoPosture: 'custom', legPosture: 'custom' }), 0);
     expect(custom.innerHTML).toBe(neutral.innerHTML);
+  });
+
+  it('keeps the shin the same length as the seat height changes, lifting the knees', () => {
+    const shin = (seatHeight) => {
+      const g = renderChairProfile(doc, buildRockerModel({ ...defaults, seatHeight }), 0);
+      const l = g.querySelector('[data-testid="stick-lower-leg"]');
+      const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map(a => parseFloat(l.getAttribute(a)));
+      return { length: Math.hypot(x2 - x1, y2 - y1) / 4, kneeY: -y1 / 4, footY: -y2 / 4 };
+    };
+    const high = shin(17);
+    const low = shin(12);
+    expect(low.length).toBeCloseTo(high.length, 5);
+    // Feet on the floor both times; the knee comes up relative to the seat
+    expect(high.footY).toBeCloseTo(0, 5);
+    expect(low.footY).toBeCloseTo(0, 5);
+    expect(low.kneeY - 12).toBeGreaterThan(high.kneeY - 17 + 1);
   });
 });
 
@@ -548,13 +579,14 @@ describe('renderInfoPanel', () => {
   });
 
   it('reports the natural tilt direction to match the drawing', () => {
-    // A CoG ahead of seat centre rolls the chair forward (positive θ in
-    // rockerGeometry); behind rolls it back.  (Much further than this
-    // and the chair rolls off the end of its runners instead.)
-    const fwd = buildRockerModel({ ...defaults, cogOffsetX: 3 });
+    // A load centre ahead of the contact point rolls the chair forward
+    // (positive θ in rockerGeometry); behind rolls it back.  (Much
+    // further than this and the chair rolls off the end of its runners.)
+    const probe = buildRockerModel(defaults);
+    const fwd = buildRockerModel({ ...defaults, contactOffset: probe.cogOffsetX - 3 });
     expect(fwd.thetaEq).toBeGreaterThan(0);
     expect(renderInfoPanel(doc, fwd).textContent).toMatch(/Natural tilt[^°]*°\s*\(fwd\)/);
-    const back = buildRockerModel({ ...defaults, cogOffsetX: -3 });
+    const back = buildRockerModel({ ...defaults, contactOffset: probe.cogOffsetX + 3 });
     expect(back.thetaEq).toBeLessThan(0);
     expect(renderInfoPanel(doc, back).textContent).toMatch(/Natural tilt[^°]*°\s*\(back\)/);
     // The magnitude is shown unsigned; the word carries the direction
@@ -565,6 +597,13 @@ describe('renderInfoPanel', () => {
     const dl = renderInfoPanel(doc, model);
     const text = dl.textContent;
     expect(text).toContain('CoG fore/aft offset');
+  });
+
+  it('reports how much the feet carry', () => {
+    const text = renderInfoPanel(doc, model).textContent;
+    expect(text).toMatch(/Feet carry\d+ lb \(\d+%\)/);
+    const dangling = buildRockerModel({ ...defaults, seatHeight: 26, radius: 60 });
+    expect(renderInfoPanel(doc, dangling).textContent).toContain('Feet carry0 lb (0%)');
   });
 
   it('marks unstable model appropriately', () => {

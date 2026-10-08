@@ -6,7 +6,7 @@
  * URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel, buildFall, POSTURE_PRESETS } from "./rocker-math.js";
+import { buildRockerModel, buildFall } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
@@ -15,7 +15,7 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 const CHAIR_IDS = ["radius", "contact-offset", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
-const POSTURE_IDS = ["posture", "cog-offset-x"];
+const POSTURE_IDS = ["torso-posture", "leg-posture"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
 
 // URL query-string short keys
@@ -29,8 +29,20 @@ const URL_KEYS = {
   "sitter-weight": "sw",
   "sitter-height": "sth",
   "sitter-gender": "sg",
-  "posture": "p",
-  "cog-offset-x": "cx",
+  "torso-posture": "pt",
+  "leg-posture": "pl",
+};
+
+/**
+ * Links from before postures were split into torso and legs carried a
+ * single `p=` posture.  Map it onto the two selects.
+ */
+const LEGACY_POSTURES = {
+  neutral:        ["upright", "flat"],
+  leaningForward: ["leaningForward", "tucked"],
+  legsForward:    ["upright", "out"],
+  armsBack:       ["armsBack", "flat"],
+  reclined:       ["slouched", "out"],
 };
 
 /**
@@ -183,6 +195,11 @@ function pushURL() {
 
 function loadFromURL() {
   const params = new URLSearchParams(window.location.search);
+  const legacy = LEGACY_POSTURES[params.get("p")];
+  if (legacy) {
+    document.getElementById("torso-posture").value = legacy[0];
+    document.getElementById("leg-posture").value = legacy[1];
+  }
   for (const id of ALL_IDS) {
     const key = URL_KEYS[id];
     if (params.has(key)) {
@@ -199,7 +216,6 @@ function loadFromURL() {
 function onPopState() {
   loadFromURL();
   updateHeightDisplay();
-  syncPostureFromOffset();
   update(false);
   applyView(0);
 }
@@ -491,8 +507,8 @@ function update(updateURL = true) {
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],
-    cogOffsetX: vals["cog-offset-x"],
-    posture: vals["posture"],
+    torsoPosture: vals["torso-posture"],
+    legPosture: vals["leg-posture"],
   });
 
   renderInfo();
@@ -527,37 +543,12 @@ function wireSteppers() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Posture ↔ CoG offset wiring                                      */
-/* ------------------------------------------------------------------ */
-
-function applyPosture(key) {
-  const preset = POSTURE_PRESETS[key];
-  if (!preset) {
-    return;
-  }
-  const offsetEl = document.getElementById("cog-offset-x");
-  offsetEl.value = preset.cogOffsetX;
-}
-
-function syncPostureFromOffset() {
-  const offsetVal = parseFloat(document.getElementById("cog-offset-x").value) || 0;
-  const match = Object.entries(POSTURE_PRESETS).find(
-    ([, p]) => p.cogOffsetX === offsetVal
-  );
-  const postureEl = document.getElementById("posture");
-  postureEl.value = match ? match[0] : "custom";
-}
-
-/* ------------------------------------------------------------------ */
 /*  Init                                                              */
 /* ------------------------------------------------------------------ */
 
 function init() {
   loadFromURL();
   updateHeightDisplay();
-
-  // Sync posture dropdown from the loaded cogOffsetX
-  syncPostureFromOffset();
 
   // Wire all inputs
   // <select> elements fire "change" reliably across all browsers;
@@ -567,15 +558,6 @@ function init() {
     const evt = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(evt, () => {
       const prevTheta = currentTheta;
-
-      // Posture dropdown → set offset, then update
-      if (id === "posture") {
-        applyPosture(el.value);
-      }
-      // Manual offset change → switch posture to Custom
-      if (id === "cog-offset-x") {
-        syncPostureFromOffset();
-      }
       update();
       // Keep showing the chair the same way; when it is at rest, let it
       // roll from where it was to its new resting point.

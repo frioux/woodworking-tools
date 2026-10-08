@@ -131,15 +131,21 @@
         </div>
       </div>
 
-      <div class="play-row">
-        <button type="button" class="play-btn" id="play-btn">Rock</button>
+      <hr class="section-divider">
+      <h2>View</h2>
+
+      <div class="view-row" role="group" aria-label="View">
+        <button type="button" class="view-btn" id="view-level" aria-pressed="true">Level</button>
+        <button type="button" class="view-btn" id="view-rest" aria-pressed="false">At rest</button>
+        <button type="button" class="view-btn" id="view-rock" aria-pressed="false">Rock</button>
       </div>
+      <p class="hint">Level is the layout view, seat parallel to the floor. At rest lets the chair settle to its natural tilt. Rock gives it a push.</p>
     </div>
 
     <!-- ─── Main Area ─── -->
     <div class="main-area">
       <div class="diagram-card">
-        <h3>Side View — Rocking Animation</h3>
+        <h3>Side View</h3>
         <div id="diagram-container"></div>
       </div>
 

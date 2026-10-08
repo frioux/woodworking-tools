@@ -2,7 +2,8 @@
  * Galbert's Rocker Model — UI orchestration
  *
  * Wires form inputs → physics model → animated SVG rendering.
- * Manages animation loop, URL deep linking, and play/pause controls.
+ * Manages the view mode (level / at rest / rocking), animation loop,
+ * URL deep linking, and play/pause controls.
  */
 
 import { buildRockerModel, buildFall, POSTURE_PRESETS } from "./rocker-math.js";
@@ -32,6 +33,16 @@ const URL_KEYS = {
   "cog-offset-x": "cx",
 };
 
+/**
+ * How the chair is shown.  Galbert lays a chair out level on its circle,
+ * then asks where it comes to rest and how it rocks:
+ *   level – the drawing-board view, seat parallel to the floor
+ *   rest  – settled at its natural resting tilt
+ *   rock  – given a push and left to rock
+ */
+const VIEW_MODES = ["level", "rest", "rock"];
+const VIEW_URL_KEY = "v";
+
 /* ------------------------------------------------------------------ */
 /*  State                                                             */
 /* ------------------------------------------------------------------ */
@@ -45,6 +56,7 @@ let currentTheta = 0;
 let transitionAmplitude = null;
 let currentFall = null; // from buildFall(): the chair is going (or has gone) over
 let showDetails = false; // centre of gravity + plumb line, toggled by tapping the radius centre
+let viewMode = "level";
 
 /* ------------------------------------------------------------------ */
 /*  Input helpers                                                     */
@@ -155,6 +167,7 @@ function buildQueryString() {
     const key = URL_KEYS[id];
     parts.push(`${key}=${encodeURIComponent(el.value)}`);
   }
+  parts.push(`${VIEW_URL_KEY}=${viewMode}`);
   return "?" + parts.join("&");
 }
 
@@ -177,6 +190,10 @@ function loadFromURL() {
       el.value = decodeURIComponent(params.get(key));
     }
   }
+  const view = params.get(VIEW_URL_KEY);
+  if (VIEW_MODES.includes(view)) {
+    viewMode = view;
+  }
 }
 
 function onPopState() {
@@ -184,7 +201,7 @@ function onPopState() {
   updateHeightDisplay();
   syncPostureFromOffset();
   update(false);
-  restartAnimation();
+  applyView(0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,10 +238,19 @@ function fallsOver() {
   return Boolean(currentModel && currentModel.fallDirection);
 }
 
-function setPlayLabel(label) {
-  const btn = document.getElementById("play-btn");
+function setRockLabel(label) {
+  const btn = document.getElementById("view-rock");
   if (btn) {
     btn.textContent = label;
+  }
+}
+
+function syncViewButtons() {
+  for (const mode of VIEW_MODES) {
+    const btn = document.getElementById(`view-${mode}`);
+    if (btn) {
+      btn.setAttribute("aria-pressed", mode === viewMode ? "true" : "false");
+    }
   }
 }
 
@@ -324,7 +350,8 @@ function animationFrame(timestamp) {
   animationId = requestAnimationFrame(animationFrame);
 }
 
-function startAnimation() {
+/** Give the chair a push and let it rock about its resting tilt. */
+function startRocking() {
   if (!currentModel) {
     return;
   }
@@ -335,7 +362,7 @@ function startAnimation() {
   transitionAmplitude = null; // regular play uses model's initialAmplitude
   playing = true;
   animationStart = null;
-  setPlayLabel("Pause");
+  setRockLabel("Pause");
   animationId = requestAnimationFrame(animationFrame);
 }
 
@@ -353,7 +380,7 @@ function startFall(fromTheta) {
   renderPose(currentFall.poseAt(0));
   playing = true;
   animationStart = null;
-  setPlayLabel("Replay");
+  setRockLabel("Replay");
   animationId = requestAnimationFrame(animationFrame);
 }
 
@@ -365,32 +392,81 @@ function stopAnimation() {
     cancelAnimationFrame(animationId);
     animationId = null;
   }
-  setPlayLabel(fallsOver() ? "Replay" : "Rock");
+  setRockLabel(viewMode === "rock" && fallsOver() ? "Replay" : "Rock");
 }
 
-/** Show the chair at rest — or, if it cannot rest, falling over. */
-function showAtRest() {
+/**
+ * Let the chair settle from `fromTheta` to its natural resting tilt.
+ * The tilt decays toward equilibrium without rocking and the animation
+ * stops on its own once it is within ~0.5°.  A chair that cannot rest
+ * falls over instead.
+ */
+function settleFrom(fromTheta) {
+  stopAnimation();
   if (!currentModel) {
     return;
   }
-  if (fallsOver()) {
-    startFall(0);
-  } else {
+  // The chair may have been lying on the floor a moment ago; it can only
+  // start from somewhere on its runners.
+  fromTheta = Math.max(-currentModel.runnerRearAngle,
+    Math.min(currentModel.runnerFrontAngle, fromTheta));
+  if (fallsOver() || !currentModel.stable) {
+    startFall(fromTheta);
+    return;
+  }
+  const amplitude = fromTheta - currentModel.thetaEq;
+  if (Math.abs(amplitude) < 0.009) {
     renderDiagram(currentModel.thetaEq);
+    return;
   }
+  // Render at the starting position so the animation begins from the correct frame
+  renderDiagram(fromTheta);
+  transitionAmplitude = amplitude;
+  playing = true;
+  animationStart = null;
+  animationId = requestAnimationFrame(animationFrame);
 }
 
-function restartAnimation() {
-  stopAnimation();
-  showAtRest();
-}
-
-function togglePlay() {
-  if (playing && !currentFall) {
+/**
+ * Show the chair in the current view mode, starting from tilt
+ * `fromTheta` where that matters (settling, falling).
+ */
+function applyView(fromTheta) {
+  syncViewButtons();
+  if (!currentModel) {
     stopAnimation();
-  } else {
-    startAnimation();
+    return;
   }
+  switch (viewMode) {
+    case "rest":
+      settleFrom(fromTheta);
+      break;
+    case "rock":
+      stopAnimation();
+      startRocking();
+      break;
+    default:
+      // On the drawing board: held level, even if it could not stand
+      stopAnimation();
+      renderDiagram(0);
+  }
+}
+
+function setViewMode(mode) {
+  const prevTheta = currentTheta;
+  if (mode === "rock" && viewMode === "rock") {
+    // Second press: pause the rock, or replay a fall
+    if (playing && !currentFall) {
+      stopAnimation();
+      return;
+    }
+    stopAnimation();
+    startRocking();
+    return;
+  }
+  viewMode = mode;
+  applyView(prevTheta);
+  pushURL();
 }
 
 /* ------------------------------------------------------------------ */
@@ -420,10 +496,9 @@ function update(updateURL = true) {
   });
 
   renderInfo();
-  // Draw a resting (or, for a chair that will fall, level) first frame;
-  // the caller decides how to animate from here.
+  // Draw a level first frame; the caller decides how to animate from here.
   currentFall = null;
-  renderDiagram(fallsOver() ? 0 : currentModel.thetaEq);
+  renderDiagram(0);
 
   if (updateURL) {
     pushURL();
@@ -449,45 +524,6 @@ function wireSteppers() {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
-}
-
-/* ------------------------------------------------------------------ */
-/*  Posture / CoG transition animation                               */
-/* ------------------------------------------------------------------ */
-
-/**
- * Animate the chair settling from `fromTheta` to the new equilibrium.
- * The chair rocks with decaying oscillations, starting at `fromTheta`,
- * and auto-stops once the oscillation amplitude falls below ~0.5°.
- * Falls back to restartAnimation() when the change is negligible or
- * the model is unstable.
- */
-function animatePostureChange(fromTheta) {
-  if (!currentModel || !currentModel.stable) {
-    restartAnimation();
-    return;
-  }
-  // The chair may have been lying on the floor a moment ago; it can only
-  // start from somewhere on its runners.
-  fromTheta = Math.max(-currentModel.runnerRearAngle,
-    Math.min(currentModel.runnerFrontAngle, fromTheta));
-  if (fallsOver()) {
-    startFall(fromTheta);
-    return;
-  }
-  const amplitude = fromTheta - currentModel.thetaEq;
-  if (Math.abs(amplitude) < 0.009) {
-    restartAnimation();
-    return;
-  }
-  // Render at the starting position so the animation begins from the correct frame
-  renderDiagram(fromTheta);
-  stopAnimation();
-  transitionAmplitude = amplitude;
-  playing = true;
-  animationStart = null;
-  setPlayLabel("Pause");
-  animationId = requestAnimationFrame(animationFrame);
 }
 
 /* ------------------------------------------------------------------ */
@@ -541,12 +577,9 @@ function init() {
         syncPostureFromOffset();
       }
       update();
-
-      if (id === "posture" || id === "cog-offset-x") {
-        animatePostureChange(prevTheta);
-      } else {
-        restartAnimation();
-      }
+      // Keep showing the chair the same way; when it is at rest, let it
+      // roll from where it was to its new resting point.
+      applyView(prevTheta);
     });
   }
 
@@ -555,20 +588,20 @@ function init() {
 
   document.getElementById("sitter-height").addEventListener("input", updateHeightDisplay);
 
-  // Play/pause button
-  const playBtn = document.getElementById("play-btn");
-  if (playBtn) {
-    playBtn.addEventListener("click", togglePlay);
+  // View mode buttons
+  for (const mode of VIEW_MODES) {
+    const btn = document.getElementById(`view-${mode}`);
+    if (btn) {
+      btn.addEventListener("click", () => setViewMode(mode));
+    }
   }
 
   // Browser navigation
   window.addEventListener("popstate", onPopState);
 
-  // Initial render — a chair that cannot stand up falls over straight away
+  // Initial render in the requested view
   update();
-  if (fallsOver()) {
-    startFall(0);
-  }
+  applyView(0);
 
   // Set initial URL if none
   if (!window.location.search) {

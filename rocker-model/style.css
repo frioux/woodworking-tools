@@ -136,23 +136,38 @@ header a:hover { color: #fff; }
   margin: 1rem 0;
 }
 
-/* --- Play button --- */
-.play-row {
-  margin-top: 1rem;
-  text-align: center;
+/* --- View mode buttons --- */
+.view-row {
+  display: flex;
+  gap: 0.4rem;
 }
-.play-btn {
-  padding: 0.5rem 2rem;
+.view-row + .hint {
+  font-size: 0.75rem;
+  color: #9c8576;
+  line-height: 1.35;
+  margin-top: 0.5rem;
+}
+.view-btn {
+  flex: 1 1 0;
+  padding: 0.5rem 0.25rem;
   border: 1px solid #5c3d2e;
   border-radius: 6px;
+  background: #faf8f5;
+  color: #5c3d2e;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  touch-action: manipulation;
+}
+.view-btn:hover {
+  background: #e8ddd2;
+}
+.view-btn[aria-pressed="true"] {
   background: #5c3d2e;
   color: #f5f0eb;
-  font-family: inherit;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s;
 }
-.play-btn:hover {
+.view-btn[aria-pressed="true"]:hover {
   background: #7a5c4f;
 }
 

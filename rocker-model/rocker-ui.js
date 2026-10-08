@@ -12,7 +12,7 @@ import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 /*  DOM references                                                    */
 /* ------------------------------------------------------------------ */
 
-const CHAIR_IDS = ["radius", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
+const CHAIR_IDS = ["radius", "contact-offset", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
 const POSTURE_IDS = ["posture", "cog-offset-x"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
@@ -20,6 +20,7 @@ const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
 // URL query-string short keys
 const URL_KEYS = {
   "radius": "r",
+  "contact-offset": "co",
   "seat-height": "sh",
   "seat-depth": "sd",
   "backrest-angle": "ba",
@@ -126,6 +127,10 @@ function validate(vals) {
   }
   if (vals["seat-height"] >= vals["radius"]) {
     setError("seat-height", "Must be less than radius");
+    ok = false;
+  }
+  if (Math.abs(vals["contact-offset"]) > vals["seat-depth"] / 2) {
+    setError("contact-offset", "Must be under the seat");
     ok = false;
   }
   if (vals["sitter-weight"] <= 0) {
@@ -406,6 +411,7 @@ function update(updateURL = true) {
     seatDepth: vals["seat-depth"],
     backrestAngle: vals["backrest-angle"],
     chairWeight: vals["chair-weight"],
+    contactOffset: vals["contact-offset"],
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],

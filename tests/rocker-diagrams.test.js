@@ -687,3 +687,70 @@ describe('profileExtent', () => {
     expect(box.maxY).toBe(3);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  Contact point fore/aft                                            */
+/* ------------------------------------------------------------------ */
+describe('contact point fore/aft', () => {
+  const shifted = () => buildRockerModel({ ...defaults, contactOffset: -4 });
+
+  it('draws the seat ahead of the contact point when the chair is level', () => {
+    // Contact point 4 in behind the seat centre ⇒ seat centre 4 in ahead of it
+    const g = renderChairProfile(doc, shifted(), 0);
+    const seat = Array.from(g.querySelectorAll('line')).find(l => l.getAttribute('stroke') === '#A0845E');
+    const xs = [parseFloat(seat.getAttribute('x1')), parseFloat(seat.getAttribute('x2'))].sort((a, b) => a - b);
+    // Seat spans −4 … +12 in (centre at +4), contact dot stays at 0
+    expect(xs[0]).toBeCloseTo(-4 * 4, 3);
+    expect(xs[1]).toBeCloseTo(12 * 4, 3);
+    const dot = g.querySelector('[data-testid="contact-point"] circle');
+    expect(parseFloat(dot.getAttribute('cx'))).toBeCloseTo(0, 3);
+  });
+
+  it('cuts the legs where they meet the circle', () => {
+    const m = shifted();
+    const g = renderChairProfile(doc, m, 0);
+    const legLen = (id) => {
+      const l = g.querySelector(`[data-testid="${id}"] line`);
+      return Math.abs(parseFloat(l.getAttribute('y1')) - parseFloat(l.getAttribute('y2'))) / 4;
+    };
+    expect(legLen('leg-rear')).toBeCloseTo(m.legLengths.rear, 3);
+    expect(legLen('leg-front')).toBeCloseTo(m.legLengths.front, 3);
+    expect(legLen('leg-rear')).toBeGreaterThan(legLen('leg-front'));
+  });
+
+  it('labels the leg lengths when details are shown', () => {
+    const m = shifted();
+    const plain = renderChairProfile(doc, m, 0);
+    expect(plain.querySelector('[data-testid="leg-rear-length"]')).toBeNull();
+    const detailed = renderChairProfile(doc, m, 0, { showDetails: true });
+    expect(detailed.querySelector('[data-testid="leg-rear-length"]').textContent)
+      .toBe(`${m.legLengths.rear.toFixed(1)} in`);
+    expect(detailed.querySelector('[data-testid="leg-front-length"]').textContent)
+      .toBe(`${m.legLengths.front.toFixed(1)} in`);
+  });
+
+  it('keeps the sitter on the shifted seat', () => {
+    const hipX = (contactOffset) => {
+      const m = buildRockerModel({ ...defaults, contactOffset });
+      const g = renderChairProfile(doc, m, 0);
+      return parseFloat(g.querySelector('[data-testid="stick-lower-leg"]').getAttribute('x1'));
+    };
+    expect(hipX(-4)).toBeCloseTo(hipX(0) + 4 * 4, 3);
+  });
+
+  it('moves the centreline with the seat', () => {
+    const g = renderChairProfile(doc, shifted(), 0);
+    const ln = g.querySelector('[data-testid="centerline"] line');
+    expect(parseFloat(ln.getAttribute('x1'))).toBeCloseTo(4 * 4, 3);
+    expect(parseFloat(ln.getAttribute('x2'))).toBeCloseTo(4 * 4, 3);
+  });
+
+  it('reports the contact point and leg lengths in the info panel', () => {
+    const m = shifted();
+    const text = renderInfoPanel(doc, m).textContent;
+    expect(text).toContain('Contact point4.0 in behind seat centre');
+    expect(text).toContain(`Rear leg length${m.legLengths.rear.toFixed(1)} in`);
+    expect(text).toContain(`Front leg length${m.legLengths.front.toFixed(1)} in`);
+    expect(renderInfoPanel(doc, model).textContent).toContain('Contact point0.0 in (under seat centre)');
+  });
+});

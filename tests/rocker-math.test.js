@@ -22,6 +22,7 @@ import {
   buildFall,
   RUNNER_REAR_OVERHANG,
   RUNNER_FRONT_OVERHANG,
+  legLengths,
 } from '../rocker-model/rocker-math.js';
 
 /* ------------------------------------------------------------------ */
@@ -757,5 +758,93 @@ describe('buildFall', () => {
         sitter.arcCenterX, sitter.arcCenterY, sitter.theta);
       expect(cogY).toBeGreaterThan(2.9);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Contact point fore/aft (chair slid along its circle)              */
+/* ------------------------------------------------------------------ */
+describe('legLengths', () => {
+  it('cuts both legs equally when the contact point is under the seat centre', () => {
+    const { front, rear } = legLengths(42, 17, 16, 0);
+    expect(front).toBeCloseTo(rear);
+    // Each leg is 8 in from the arc bottom: rise = R(1 − cos(asin(8/R)))
+    expect(front).toBeCloseTo(17 - 42 * (1 - Math.cos(Math.asin(8 / 42))));
+  });
+
+  it('lengthens the rear leg and shortens the front one as the contact point moves back', () => {
+    const level = legLengths(42, 17, 16, 0);
+    const back = legLengths(42, 17, 16, -4);
+    expect(back.rear).toBeGreaterThan(level.rear);
+    expect(back.front).toBeLessThan(level.front);
+  });
+
+  it('puts a leg at full seat height when it stands on the contact point', () => {
+    expect(legLengths(42, 17, 16, -8).rear).toBeCloseTo(17);
+    expect(legLengths(42, 17, 16, 8).front).toBeCloseTo(17);
+  });
+});
+
+describe('runnerExtent with a contact offset', () => {
+  it('keeps the overhang past each leg', () => {
+    const { rearAngle, frontAngle } = runnerExtent(42, 16, -4);
+    expect(42 * Math.sin(rearAngle)).toBeCloseTo(8 - 4 + RUNNER_REAR_OVERHANG);
+    expect(42 * Math.sin(frontAngle)).toBeCloseTo(8 + 4 + RUNNER_FRONT_OVERHANG);
+  });
+});
+
+describe('buildRockerModel contact offset', () => {
+  const base = {
+    radius: 42, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+    chairWeight: 25, sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+  };
+
+  it('defaults to the contact point under the seat centre', () => {
+    const m = buildRockerModel(base);
+    expect(m.contactOffset).toBe(0);
+    expect(m.cogLocalX).toBeCloseTo(m.cogOffsetX);
+  });
+
+  it('rolls forward to rest when the contact point is behind the sitter', () => {
+    // Contact point 6 in behind the seat centre: the weight is ahead of
+    // it, so the chair pitches forward until the CoG is plumb over it.
+    const level = buildRockerModel(base);
+    const back = buildRockerModel({ ...base, contactOffset: -6 });
+    expect(back.thetaEq).toBeGreaterThan(level.thetaEq + 0.1);
+    expect(back.fallDirection).toBe(0);
+    // The CoG relative to the seat is unchanged — only the chair moved
+    expect(back.cogOffsetX).toBeCloseTo(level.cogOffsetX);
+    expect(back.cogLocalX).toBeCloseTo(level.cogLocalX + 6);
+  });
+
+  it('rolls back to rest when the contact point is ahead of the sitter', () => {
+    const level = buildRockerModel(base);
+    const fwd = buildRockerModel({ ...base, contactOffset: 4 });
+    expect(fwd.thetaEq).toBeLessThan(level.thetaEq - 0.05);
+  });
+
+  it('reports the leg cut lengths', () => {
+    const m = buildRockerModel({ ...base, contactOffset: -4 });
+    expect(m.legLengths).toEqual(legLengths(42, 17, 16, -4));
+    expect(m.legLengths.rear).toBeGreaterThan(m.legLengths.front);
+  });
+
+  it('rests with the CoG plumb over the contact point', () => {
+    const m = buildRockerModel({ ...base, contactOffset: -5 });
+    const g = m.geometryAt(1000); // long after the rocking has died away
+    expect(g.cogX).toBeCloseTo(g.contactX, 3);
+    // Level, the seat centre sits 5 in ahead of the contact point
+    const level = rockerGeometry(42, 17, 16, m.cogAboveSeat, 0, m.cogLocalX, -5);
+    expect(level.seatX).toBeCloseTo(5);
+    expect(level.contactX).toBeCloseTo(0);
+  });
+
+  it('starts a fall from the shifted seat', () => {
+    const m = buildRockerModel({ ...base, radius: 26, contactOffset: -3 });
+    expect(m.fallDirection).not.toBe(0);
+    const fall = buildFall(m);
+    const p = fall.poseAt(0);
+    // Seat centre sits 3 in ahead of the level contact point
+    expect(p.geom.seatX).toBeCloseTo(3);
   });
 });

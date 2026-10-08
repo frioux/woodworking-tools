@@ -115,6 +115,12 @@ header a:hover { color: #fff; }
   border-color: #a0845e;
   box-shadow: 0 0 0 2px rgba(160, 132, 94, 0.2);
 }
+.form-group .hint {
+  font-size: 0.75rem;
+  color: #9c8576;
+  line-height: 1.35;
+  margin-top: 0.25rem;
+}
 .form-group.has-error label {
   color: #c00;
 }

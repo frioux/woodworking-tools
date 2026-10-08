@@ -93,8 +93,12 @@ const POSES = {
  */
 function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   const { radius, seatHeight, seatDepth, backrestAngle,
-          sitterGender, sitterHeight, posture: postureKey } = model;
+          sitterGender, sitterHeight, posture: postureKey,
+          contactOffset = 0 } = model;
   const theta = frame ? frame.theta : chairTheta;
+  // Seat centre in the chair's local frame (the arc centre is the origin,
+  // the level contact point straight below it)
+  const seatCX = -contactOffset;
   const arcCenterX = frame ? frame.arcCenterX : geom.arcCenterX;
   const arcCenterY = frame ? frame.arcCenterY : geom.arcCenterY;
   const pose = POSES[postureKey] || POSES.neutral;
@@ -139,14 +143,14 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   // sitter's thighs are shorter than the seat depth, scoot forward so the
   // knees always project past the front seat edge (prevents the lower leg
   // from visually intersecting the seat plank).
-  let hipLX = -seatHalfLen + torsoHalfW;
+  let hipLX = seatCX - seatHalfLen + torsoHalfW;
   const hipLY = seatSurfaceY;
 
   // Knee: thigh length forward from hip, at seat surface level
   let kneeLX = hipLX + thighLen;
-  if (kneeLX < seatHalfLen) {
-    hipLX = seatHalfLen - thighLen;
-    kneeLX = seatHalfLen;
+  if (kneeLX < seatCX + seatHalfLen) {
+    hipLX = seatCX + seatHalfLen - thighLen;
+    kneeLX = seatCX + seatHalfLen;
   }
   // Posture: slide the hips (and so the knees) forward on the seat
   hipLX += pose.hipShift;
@@ -160,7 +164,7 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
   const footLY = kneeLY - lowerLegLen * Math.cos(legForwardAngle);
 
   const backAngleRad = ((backrestAngle || 100)) * Math.PI / 180;
-  const backBaseX = -seatHalfLen;
+  const backBaseX = seatCX - seatHalfLen;
   const backBaseY = seatHeight - radius;
   // Unit normal to the backrest line pointing toward the *front* of the
   // chair.  The backrest direction is (cos a, sin a) for a > 90° it runs
@@ -415,22 +419,26 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
 export function renderChairProfile(doc, model, theta, options = {}) {
   const { showDetails = false, sitter = null } = options;
   const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
-          cogOffsetX = 0, sitterHeight = 68 } = model;
+          contactOffset = 0, sitterHeight = 68 } = model;
+  const cogLocalX = model.cogLocalX ?? ((model.cogOffsetX || 0) - contactOffset);
   const g = svgEl(doc, "g");
 
   const geom = options.geom
-    || rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogOffsetX);
+    || rockerGeometry(radius, seatHeight, seatDepth, cogAboveSeat, theta, cogLocalX, contactOffset);
   const { contactX, cogX, cogY, arcCenterX, arcCenterY } = geom;
 
   const s = SCALE;
+  // Seat centre in the chair's local frame: the level contact point is
+  // `contactOffset` ahead of it (see legLengths() in rocker-math.js)
+  const seatCX = -contactOffset;
 
   // --- Rocker arc (the curved runner) ---
   // The runner is a real length of wood: it runs from the rear overhang
   // to the front overhang (see runnerExtent()).  In the world frame the
   // body bottom sits at angle −θ from vertical (CW rotation), so a point
   // at local angle `a` along the runner is drawn at a − θ.
-  const runnerRear = model.runnerRearAngle ?? runnerExtent(radius, seatDepth).rearAngle;
-  const runnerFront = model.runnerFrontAngle ?? runnerExtent(radius, seatDepth).frontAngle;
+  const runnerRear = model.runnerRearAngle ?? runnerExtent(radius, seatDepth, contactOffset).rearAngle;
+  const runnerFront = model.runnerFrontAngle ?? runnerExtent(radius, seatDepth, contactOffset).frontAngle;
   const arcGroup = svgEl(doc, "g");
 
   const steps = 40;
@@ -532,30 +540,43 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   g.appendChild(rc);
 
   // --- Legs ---
-  // Two legs from the rocker arc up to the seat.
-  // In local (chair) frame: front leg at +seatDepth/2, back leg at -seatDepth/2
-  // Both rise from the arc surface to seat height.
-
-  const legOffsets = [seatDepth * 0.5, -seatDepth * 0.5]; // front, back in local-x
+  // Two legs from the rocker arc up to the seat.  In the local (chair)
+  // frame the legs stand seatDepth/2 either side of the seat centre and
+  // are cut off wherever they cross the circle (see legLengths()).
   const legTopLocalY = seatHeight - radius;                // seat level in local frame
-  // Place leg bottoms on the arc at the angle corresponding to each leg offset
-  for (const lx of legOffsets) {
+  const legs = [
+    { lx: seatCX + seatDepth * 0.5, length: model.legLengths?.front, id: "leg-front" },
+    { lx: seatCX - seatDepth * 0.5, length: model.legLengths?.rear, id: "leg-rear" },
+  ];
+  for (const { lx, length, id } of legs) {
     // Bottom of leg: on the arc surface (relative to arc centre)
     const legAngle = Math.asin(Math.max(-1, Math.min(1, lx / radius)));
     const localBotX = radius * Math.sin(legAngle);
     const localBotY = -radius * Math.cos(legAngle);
 
-    // Top of leg: at seat level, same x
-    const localTopX = lx;
-    const localTopY = legTopLocalY;
-
     // Rotate into world frame (clockwise by θ)
-    const botX = arcCenterX + localBotX * Math.cos(theta) + localBotY * Math.sin(theta);
-    const botY = arcCenterY - localBotX * Math.sin(theta) + localBotY * Math.cos(theta);
-    const topX = arcCenterX + localTopX * Math.cos(theta) + localTopY * Math.sin(theta);
-    const topY = arcCenterY - localTopX * Math.sin(theta) + localTopY * Math.cos(theta);
+    const [botX, botY] = localToWorld(localBotX, localBotY, arcCenterX, arcCenterY, theta);
+    const [topX, topY] = localToWorld(lx, legTopLocalY, arcCenterX, arcCenterY, theta);
 
-    g.appendChild(line(doc, botX * s, -botY * s, topX * s, -topY * s, COLOR_LEGS, 3));
+    const leg = svgEl(doc, "g", { "data-testid": id });
+    leg.appendChild(line(doc, botX * s, -botY * s, topX * s, -topY * s, COLOR_LEGS, 3));
+    if (showDetails && length !== undefined) {
+      // Cut length, beside the leg at mid height, outside the chair
+      const [mx, my] = localToWorld(lx, (localBotY + legTopLocalY) / 2, arcCenterX, arcCenterY, theta);
+      const outside = lx > seatCX;
+      const label = svgEl(doc, "text", {
+        x: mx * s + (outside ? 5 : -5),
+        y: -my * s + 4,
+        "font-size": 9,
+        fill: COLOR_LEGS,
+        "font-family": "sans-serif",
+        "text-anchor": outside ? "start" : "end",
+        "data-testid": `${id}-length`,
+      });
+      label.textContent = `${length.toFixed(1)} in`;
+      leg.appendChild(label);
+    }
+    g.appendChild(leg);
   }
 
   // --- Seat ---
@@ -563,8 +584,8 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   const seatHalfLen = seatDepth / 2; // seat spans its full depth
 
   const seatEnds = [
-    [-seatHalfLen, legTopLocalY],
-    [seatHalfLen, legTopLocalY],
+    [seatCX - seatHalfLen, legTopLocalY],
+    [seatCX + seatHalfLen, legTopLocalY],
   ];
   const seatWorld = seatEnds.map(([lx, ly]) => [
     arcCenterX + lx * Math.cos(theta) + ly * Math.sin(theta),
@@ -577,19 +598,21 @@ export function renderChairProfile(doc, model, theta, options = {}) {
 
   // --- Chair centreline (℄) ---
   // Dotted line midway between the legs, from the rocker surface up to
-  // the seat.  It rotates with the chair, so at rest it coincides with
-  // the plumb radius line and diverges from it as the chair rocks.
-  const clLocalBotY = -radius;      // rocker surface at local x = 0
+  // the seat.  It rotates with the chair.  With the contact point under
+  // the seat centre it coincides with the plumb radius line when the
+  // chair is level, and diverges from it as the chair rocks; shifting
+  // the contact point fore or aft moves it off the plumb line.
+  const clLocalBotY = -radius * Math.cos(Math.asin(Math.max(-1, Math.min(1, seatCX / radius))));
   const clLocalTopY = legTopLocalY; // seat
-  const [clBotX, clBotY] = localToWorld(0, clLocalBotY, arcCenterX, arcCenterY, theta);
-  const [clTopX, clTopY] = localToWorld(0, clLocalTopY, arcCenterX, arcCenterY, theta);
+  const [clBotX, clBotY] = localToWorld(seatCX, clLocalBotY, arcCenterX, arcCenterY, theta);
+  const [clTopX, clTopY] = localToWorld(seatCX, clLocalTopY, arcCenterX, arcCenterY, theta);
   const cl = svgEl(doc, "g", { "data-testid": "centerline" });
   const clLine = line(doc, clBotX * s, -clBotY * s, clTopX * s, -clTopY * s,
     COLOR_LEGS, 1, "1.5 3");
   clLine.setAttribute("stroke-linecap", "round");
   cl.appendChild(clLine);
   // Label beside the line, midway up, in the clear space between the legs
-  const [clMidX, clMidY] = localToWorld(0, (clLocalBotY + clLocalTopY) / 2,
+  const [clMidX, clMidY] = localToWorld(seatCX, (clLocalBotY + clLocalTopY) / 2,
                                         arcCenterX, arcCenterY, theta);
   const clLabel = svgEl(doc, "text", {
     x: clMidX * s + 5,
@@ -612,7 +635,7 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   // Long enough that the backrest reaches past the top of the sitter's
   // head (see backrestLength()).
   const backH = backrestLength(sitterHeight, backrestAngle);
-  const localBaseX = -seatHalfLen;
+  const localBaseX = seatCX - seatHalfLen;
   const localBaseY = legTopLocalY;
   const localTopX = localBaseX + backH * Math.cos(backAngleRad);
   const localTopY = localBaseY + backH * Math.sin(backAngleRad);
@@ -829,8 +852,18 @@ export function renderInfoPanel(doc, model) {
   }
   const upright = model.stable && !falls;
 
+  const contact = model.contactOffset || 0;
+  const contactWord = contact > 0.001 ? " ahead of seat centre"
+                    : contact < -0.001 ? " behind seat centre" : " (under seat centre)";
+  const legs = model.legLengths;
+
   const items = [
     ["Natural tilt", falls ? `Tips over (${falls > 0 ? "fwd" : "back"})` : `${thetaEqDeg}°${tiltDir}`],
+    ["Contact point", `${Math.abs(contact).toFixed(1)} in${contactWord}`],
+    ...(legs ? [
+      ["Front leg length", `${legs.front.toFixed(1)} in`],
+      ["Rear leg length", `${legs.rear.toFixed(1)} in`],
+    ] : []),
     ["Effective pendulum length", `${model.lEff.toFixed(1)} in`],
     ["Natural period", upright ? `${model.period.toFixed(2)} s` : (model.stable ? "—" : "Unstable")],
     ["Rocks per minute", upright ? `${(60 / model.period).toFixed(1)}` : "—"],

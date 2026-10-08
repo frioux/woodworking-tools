@@ -216,7 +216,7 @@ function renderStickFigure(doc, model, chairTheta, geom, frame = null) {
 export function renderChairProfile(doc, model, theta, options = {}) {
   const { showDetails = false, sitter = null } = options;
   const { radius, seatHeight, seatDepth, backrestAngle, cogAboveSeat,
-          contactOffset = 0, sitterHeight = 68 } = model;
+          contactOffset = 0, seatRearOverhang = 0, sitterHeight = 68 } = model;
   const cogLocalX = model.cogLocalX ?? ((model.cogOffsetX || 0) - contactOffset);
   const g = svgEl(doc, "g");
 
@@ -384,11 +384,13 @@ export function renderChairProfile(doc, model, theta, options = {}) {
   }
 
   // --- Seat ---
-  // A horizontal line in the chair's local frame, from front to back
+  // A horizontal line in the chair's local frame, from front to back.
+  // The plank runs on behind the backrest by the rear overhang: that
+  // rear edge is where the contact point is measured from.
   const seatHalfLen = seatDepth / 2; // seat spans its full depth
 
   const seatEnds = [
-    [seatCX - seatHalfLen, legTopLocalY],
+    [seatCX - seatHalfLen - seatRearOverhang, legTopLocalY],
     [seatCX + seatHalfLen, legTopLocalY],
   ];
   const seatWorld = seatEnds.map(([lx, ly]) => [
@@ -659,14 +661,19 @@ export function renderInfoPanel(doc, model) {
   }
   const upright = model.stable && !falls;
 
+  // Fore/aft positions are reported the way a builder measures them:
+  // from the rear edge of the seat, forward.
+  const seatBack = (model.seatDepth || 0) / 2 + (model.seatRearOverhang || 0);
+  const fromSeatBack = (x) => `${(x + seatBack).toFixed(1)} in from seat back`;
   const contact = model.contactOffset || 0;
-  const contactWord = contact > 0.001 ? " ahead of seat centre"
-                    : contact < -0.001 ? " behind seat centre" : " (under seat centre)";
   const legs = model.legLengths;
+  const restAngle = model.restBackrestAngle;
 
   const items = [
     ["Natural tilt", falls ? `Tips over (${falls > 0 ? "fwd" : "back"})` : `${thetaEqDeg}°${tiltDir}`],
-    ["Contact point", `${Math.abs(contact).toFixed(1)} in${contactWord}`],
+    ["Backrest at rest", restAngle === null || restAngle === undefined
+      ? "—" : `${restAngle.toFixed(1)}° from floor`],
+    ["Contact point", fromSeatBack(contact)],
     ...(legs ? [
       ["Front leg length", `${legs.front.toFixed(1)} in`],
       ["Rear leg length", `${legs.rear.toFixed(1)} in`],
@@ -678,7 +685,7 @@ export function renderInfoPanel(doc, model) {
       ? `± ${(model.seatHeight * model.initialAmplitude).toFixed(1)} in`
       : "—"],
     ["System CoG above floor", `${model.cogHeight.toFixed(1)} in`],
-    ["CoG fore/aft offset", `${(model.cogOffsetX || 0).toFixed(1)} in`],
+    ["Load centre", fromSeatBack(model.cogOffsetX || 0)],
     ...(model.footLoad !== undefined ? [
       ["Feet carry", `${model.footLoad.toFixed(0)} lb (${Math.round(100 * model.footLoad / (model.sitterWeight || 1))}%)`],
     ] : []),

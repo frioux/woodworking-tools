@@ -28,13 +28,23 @@
       </div>
 
       <div class="form-group">
-        <label for="contact-offset">Contact Point Fore/Aft (in) <span class="error"></span></label>
+        <label for="contact-from-back">Contact Point from Seat Back (in) <span class="error"></span></label>
         <div class="input-row">
           <button type="button" class="step-btn step-down" aria-label="move contact point back">&minus;</button>
-          <input type="number" id="contact-offset" value="-3" step="0.5">
+          <input type="number" id="contact-from-back" value="6" min="0" step="0.5">
           <button type="button" class="step-btn step-up" aria-label="move contact point forward">&plus;</button>
         </div>
-        <p class="hint">Where the rocker meets the floor with the seat level, measured from the seat centre (+ is forward). The legs are cut wherever they meet the circle.</p>
+        <p class="hint">Where the rocker meets the floor with the seat level, measured forward from the rear edge of the seat. The legs are cut wherever they meet the circle.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="seat-rear-overhang">Seat Behind Backrest (in) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease seat overhang">&minus;</button>
+          <input type="number" id="seat-rear-overhang" value="1" min="0" step="0.25">
+          <button type="button" class="step-btn step-up" aria-label="increase seat overhang">&plus;</button>
+        </div>
+        <p class="hint">How far the seat runs on behind where the back meets it. The contact point is measured from that rear edge.</p>
       </div>
 
       <div class="form-group">
@@ -62,6 +72,16 @@
           <input type="number" id="backrest-angle" value="100" min="70" max="135" step="1">
           <button type="button" class="step-btn step-up" aria-label="increase backrest angle">&plus;</button>
         </div>
+      </div>
+
+      <div class="form-group">
+        <label for="rest-angle">Backrest Angle at Rest (&deg;) <span class="error"></span></label>
+        <div class="input-row">
+          <button type="button" class="step-btn step-down" aria-label="decrease backrest angle at rest">&minus;</button>
+          <input type="number" id="rest-angle" step="1" placeholder="tips over">
+          <button type="button" class="step-btn step-up" aria-label="increase backrest angle at rest">&plus;</button>
+        </div>
+        <p class="hint">The angle the back makes with the floor once the chair settles under the sitter. Type a target and the contact point moves to give it.</p>
       </div>
 
       <div class="form-group">

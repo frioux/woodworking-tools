@@ -354,6 +354,91 @@ export function equilibriumAngle(radius, seatHeight, cogAboveSeat, cogLocalX) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Contact point measured from the back of the seat                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How far the seat plank runs on behind the backrest, by default.  A
+ * builder hooks the tape on the rear edge of the seat, which on most
+ * chairs is about an inch behind where the back meets it.
+ */
+export const DEFAULT_SEAT_REAR_OVERHANG = 1;
+
+/**
+ * Convert a contact point measured from the rear edge of the seat into
+ * the model's own offset from the seat centre.
+ *
+ * The seat centre is seatDepth/2 ahead of the backrest line, and the
+ * rear edge of the plank is `seatRearOverhang` behind that line.
+ *
+ * @param {number} fromSeatBack      – contact point ahead of the rear seat edge (in)
+ * @param {number} seatDepth         – seat depth to backrest (in)
+ * @param {number} [seatRearOverhang=0] – seat behind the backrest (in)
+ * @returns {number} contact point ahead of the seat centre (in)
+ */
+export function contactOffsetFromSeatBack(fromSeatBack, seatDepth, seatRearOverhang = 0) {
+  return fromSeatBack - seatRearOverhang - seatDepth / 2;
+}
+
+/**
+ * Inverse of contactOffsetFromSeatBack(): where the contact point lands
+ * measured from the rear edge of the seat.
+ *
+ * @param {number} contactOffset     – contact point ahead of the seat centre (in)
+ * @param {number} seatDepth         – seat depth to backrest (in)
+ * @param {number} [seatRearOverhang=0] – seat behind the backrest (in)
+ * @returns {number} contact point ahead of the rear seat edge (in)
+ */
+export function contactFromSeatBack(contactOffset, seatDepth, seatRearOverhang = 0) {
+  return contactOffset + seatRearOverhang + seatDepth / 2;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Backrest angle at rest                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The angle the backrest makes with the floor once the loaded chair has
+ * settled, measured on the front (sitter's) side so a larger number is
+ * more recline.  The backrest is `backrestAngle` from the level seat;
+ * rocking the chair back (negative θ) lays it further down.
+ *
+ * @param {number} backrestAngle – degrees from the seat (90 = vertical)
+ * @param {number} thetaEq       – resting tilt (rad, + forward)
+ * @returns {number} degrees from the floor
+ */
+export function restBackrestAngle(backrestAngle, thetaEq) {
+  return backrestAngle - (thetaEq * 180) / Math.PI;
+}
+
+/**
+ * Where to put the contact point so the backrest comes to rest at a
+ * chosen angle from the floor.
+ *
+ * Nothing about the load depends on the contact point except its
+ * fore/aft distance from it, so the equilibrium relation in
+ * equilibriumAngle() runs backwards in closed form:
+ *
+ *   cogLocalX = −localCogY · tan(θ_target)
+ *
+ * and the contact offset is the load centre less that.
+ *
+ * @param {object} model          – from buildRockerModel()
+ * @param {number} targetRestAngle – backrest angle from the floor at rest (degrees)
+ * @returns {number|null} contact point ahead of the seat centre (in), or
+ *   null when the chair has no resting point to aim for
+ */
+export function contactOffsetForRestAngle(model, targetRestAngle) {
+  const { radius, seatHeight, cogAboveSeat, backrestAngle, cogOffsetX } = model;
+  const localCogY = seatHeight - radius + cogAboveSeat;
+  const thetaTarget = ((backrestAngle - targetRestAngle) * Math.PI) / 180;
+  if (localCogY >= 0 || Math.abs(thetaTarget) >= Math.PI / 2) {
+    return null;
+  }
+  return cogOffsetX + localCogY * Math.tan(thetaTarget);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Runner extent                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -753,6 +838,9 @@ export function systemCogOffsetX(sitterWeight, sitterOffsetX, chairWeight, chair
  *   puts the contact point behind the seat centre: the chair sits further
  *   forward on its circle, the rear legs grow and the front legs shrink
  *   (see legLengths()).
+ * @param {number} [params.seatRearOverhang=1] – how far the seat plank
+ *   runs on behind the backrest (in); the builder's tape hooks on that
+ *   rear edge (see contactFromSeatBack())
  * @param {string} [params.torsoPosture="upright"] – key of TORSO_POSTURES
  * @param {string} [params.legPosture="flat"]      – key of LEG_POSTURES
  * @returns {object} model with derived quantities and a `angleAt(t)` function
@@ -761,6 +849,7 @@ export function buildRockerModel(params) {
   const { radius, seatHeight, seatDepth, backrestAngle = 100,
           sitterWeight, sitterHeight, sitterGender,
           chairWeight = 0, contactOffset = 0,
+          seatRearOverhang = DEFAULT_SEAT_REAR_OVERHANG,
           torsoPosture = "upright", legPosture = "flat" } = params;
 
   // How the sitter sits, and where that puts their weight
@@ -837,6 +926,14 @@ export function buildRockerModel(params) {
     chairWeight,
     sitterWeight,
     contactOffset,
+    seatRearOverhang,
+    /** The contact point measured from the rear edge of the seat (in). */
+    contactFromSeatBack: contactFromSeatBack(contactOffset, seatDepth, seatRearOverhang),
+    /**
+     * Backrest angle from the floor once the chair has settled (degrees,
+     * see restBackrestAngle()); null when it never settles.
+     */
+    restBackrestAngle: stable && !falls ? restBackrestAngle(backrestAngle, thetaEq) : null,
     /** Where the legs are cut off by the circle, seat level (in). */
     legLengths: legLengths(radius, seatHeight, seatDepth, contactOffset),
     /** Weight carried by the sitter's feet on the floor (lb). */
@@ -921,14 +1018,14 @@ const OOF_DURATION = 1.5;
  */
 function floorHitAngle(model, thetaEnd, direction) {
   const { radius, seatHeight, seatDepth, backrestAngle, sitterHeight,
-          contactOffset = 0 } = model;
+          contactOffset = 0, seatRearOverhang = 0 } = model;
   const backRad = ((backrestAngle || 100) * Math.PI) / 180;
   const backH = backrestLength(sitterHeight || 68, backrestAngle);
   const seatLocalY = seatHeight - radius;
   const seatCX = -contactOffset;
   const points = [
     [seatCX - seatDepth / 2 + backH * Math.cos(backRad), seatLocalY + backH * Math.sin(backRad)], // backrest top
-    [seatCX - seatDepth / 2, seatLocalY],   // rear seat edge
+    [seatCX - seatDepth / 2 - seatRearOverhang, seatLocalY],   // rear seat edge
     [seatCX + seatDepth / 2, seatLocalY],   // front seat edge
   ];
   const step = Math.PI / 360;

@@ -25,6 +25,11 @@ import {
   RUNNER_REAR_OVERHANG,
   RUNNER_FRONT_OVERHANG,
   legLengths,
+  DEFAULT_SEAT_REAR_OVERHANG,
+  contactOffsetFromSeatBack,
+  contactFromSeatBack,
+  restBackrestAngle,
+  contactOffsetForRestAngle,
 } from '../rocker-model/rocker-math.js';
 
 /* ------------------------------------------------------------------ */
@@ -943,5 +948,87 @@ describe('buildRockerModel contact offset', () => {
     const p = fall.poseAt(0);
     // Seat centre sits 3 in behind the level contact point
     expect(p.geom.seatX).toBeCloseTo(-3);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Contact point from the back of the seat                           */
+/* ------------------------------------------------------------------ */
+const defaults = {
+  radius: 42, seatHeight: 17, seatDepth: 16, backrestAngle: 100,
+  chairWeight: 25, sitterWeight: 170, sitterHeight: 70, sitterGender: 'male',
+};
+
+describe('contact point measured from the seat back', () => {
+  it('converts between the seat-back and seat-centre measurements', () => {
+    // 16 in seat with 1 in behind the backrest: the centre is 9 in from the rear edge
+    expect(contactOffsetFromSeatBack(9, 16, 1)).toBeCloseTo(0);
+    expect(contactOffsetFromSeatBack(6, 16, 1)).toBeCloseTo(-3);
+    expect(contactFromSeatBack(-3, 16, 1)).toBeCloseTo(6);
+    expect(contactFromSeatBack(contactOffsetFromSeatBack(4.25, 18, 0.5), 18, 0.5)).toBeCloseTo(4.25);
+  });
+
+  it('reports the contact point from the seat back on the model', () => {
+    const m = buildRockerModel({ ...defaults, contactOffset: -3 });
+    expect(m.seatRearOverhang).toBe(DEFAULT_SEAT_REAR_OVERHANG);
+    expect(m.contactFromSeatBack).toBeCloseTo(6);
+    const wide = buildRockerModel({ ...defaults, contactOffset: -3, seatRearOverhang: 2 });
+    expect(wide.contactFromSeatBack).toBeCloseTo(7);
+  });
+
+  it('does not change the physics', () => {
+    const narrow = buildRockerModel({ ...defaults, contactOffset: -3, seatRearOverhang: 0 });
+    const wide = buildRockerModel({ ...defaults, contactOffset: -3, seatRearOverhang: 3 });
+    expect(wide.thetaEq).toBeCloseTo(narrow.thetaEq);
+    expect(wide.legLengths).toEqual(narrow.legLengths);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Backrest angle at rest                                            */
+/* ------------------------------------------------------------------ */
+describe('restBackrestAngle', () => {
+  it('is the backrest angle when the chair rests level', () => {
+    expect(restBackrestAngle(100, 0)).toBeCloseTo(100);
+  });
+
+  it('lays the back further down as the chair rocks back', () => {
+    expect(restBackrestAngle(100, -5 * Math.PI / 180)).toBeCloseTo(105);
+    expect(restBackrestAngle(100, 5 * Math.PI / 180)).toBeCloseTo(95);
+  });
+
+  it('is on the model, and missing when the chair never settles', () => {
+    const m = buildRockerModel(defaults);
+    expect(m.restBackrestAngle).toBeCloseTo(100 - m.thetaEq * 180 / Math.PI);
+    expect(buildRockerModel({ ...defaults, radius: 20 }).restBackrestAngle).toBeNull();
+    const falls = buildRockerModel({ ...defaults, radius: 26, contactOffset: 6 });
+    expect(falls.fallDirection).not.toBe(0);
+    expect(falls.restBackrestAngle).toBeNull();
+  });
+});
+
+describe('contactOffsetForRestAngle', () => {
+  it('finds the contact point that gives a chosen resting angle', () => {
+    const m = buildRockerModel(defaults);
+    for (const target of [95, 100, 105, 110]) {
+      const offset = contactOffsetForRestAngle(m, target);
+      const built = buildRockerModel({ ...defaults, contactOffset: offset });
+      expect(built.restBackrestAngle).toBeCloseTo(target, 6);
+    }
+  });
+
+  it('round-trips the model it was given', () => {
+    const m = buildRockerModel({ ...defaults, contactOffset: -3 });
+    expect(contactOffsetForRestAngle(m, m.restBackrestAngle)).toBeCloseTo(-3, 6);
+  });
+
+  it('asks for a further-back contact point for more recline', () => {
+    const m = buildRockerModel(defaults);
+    expect(contactOffsetForRestAngle(m, 110)).toBeGreaterThan(contactOffsetForRestAngle(m, 100));
+  });
+
+  it('gives up when the chair cannot rest', () => {
+    expect(contactOffsetForRestAngle(buildRockerModel({ ...defaults, radius: 20 }), 105)).toBeNull();
+    expect(contactOffsetForRestAngle(buildRockerModel(defaults), 200)).toBeNull();
   });
 });

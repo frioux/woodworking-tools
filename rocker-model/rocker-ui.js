@@ -6,22 +6,29 @@
  * URL deep linking, and play/pause controls.
  */
 
-import { buildRockerModel, buildFall } from "./rocker-math.js";
+import { buildRockerModel, buildFall, contactOffsetFromSeatBack, contactFromSeatBack,
+         contactOffsetForRestAngle } from "./rocker-math.js";
 import { renderScene, renderInfoPanel } from "./rocker-diagrams.js";
 
 /* ------------------------------------------------------------------ */
 /*  DOM references                                                    */
 /* ------------------------------------------------------------------ */
 
-const CHAIR_IDS = ["radius", "contact-offset", "seat-height", "seat-depth", "backrest-angle", "chair-weight"];
+const CHAIR_IDS = ["radius", "contact-from-back", "seat-rear-overhang", "seat-height", "seat-depth",
+                   "backrest-angle", "chair-weight"];
 const SITTER_IDS = ["sitter-weight", "sitter-height", "sitter-gender"];
 const POSTURE_IDS = ["torso-posture", "leg-posture"];
 const ALL_IDS = [...CHAIR_IDS, ...SITTER_IDS, ...POSTURE_IDS];
 
+// Derived from the chair and sitter, shown as an input so a target can be
+// typed in; never stored in the URL.
+const REST_ANGLE_ID = "rest-angle";
+
 // URL query-string short keys
 const URL_KEYS = {
   "radius": "r",
-  "contact-offset": "co",
+  "contact-from-back": "cb",
+  "seat-rear-overhang": "so",
   "seat-height": "sh",
   "seat-depth": "sd",
   "backrest-angle": "ba",
@@ -44,6 +51,13 @@ const LEGACY_POSTURES = {
   armsBack:       ["armsBack", "flat"],
   reclined:       ["slouched", "out"],
 };
+
+/**
+ * Older links carried the contact point as `co=`, measured from the seat
+ * centre with + forward.  It is now measured from the rear edge of the
+ * seat (`cb=`), which is where a builder hooks the tape.
+ */
+const LEGACY_CONTACT_KEY = "co";
 
 /**
  * How the chair is shown.  Galbert lays a chair out level on its circle,
@@ -106,7 +120,7 @@ function updateHeightDisplay() {
 /* ------------------------------------------------------------------ */
 
 function clearAllErrors() {
-  for (const id of ALL_IDS) {
+  for (const id of [...ALL_IDS, REST_ANGLE_ID]) {
     const group = document.getElementById(id)?.closest(".form-group");
     if (group) {
       group.classList.remove("has-error");
@@ -127,6 +141,20 @@ function setError(id, msg) {
       errEl.textContent = msg;
     }
   }
+}
+
+/**
+ * The legs stand at the backrest line and the front edge of the seat;
+ * the runner has to touch the floor somewhere between them.
+ */
+function contactBetweenLegs(fromBack, vals) {
+  const rear = vals["seat-rear-overhang"];
+  return fromBack >= rear && fromBack <= rear + vals["seat-depth"];
+}
+
+function toContactOffset(vals) {
+  return contactOffsetFromSeatBack(vals["contact-from-back"], vals["seat-depth"],
+                                   vals["seat-rear-overhang"]);
 }
 
 function validate(vals) {
@@ -153,8 +181,12 @@ function validate(vals) {
     setError("seat-height", "Must be less than radius");
     ok = false;
   }
-  if (Math.abs(vals["contact-offset"]) > vals["seat-depth"] / 2) {
-    setError("contact-offset", "Must be under the seat");
+  if (vals["seat-rear-overhang"] < 0) {
+    setError("seat-rear-overhang", "Cannot be negative");
+    ok = false;
+  }
+  if (!contactBetweenLegs(vals["contact-from-back"], vals)) {
+    setError("contact-from-back", "Must be between the legs");
     ok = false;
   }
   if (vals["sitter-weight"] <= 0) {
@@ -206,6 +238,12 @@ function loadFromURL() {
       const el = document.getElementById(id);
       el.value = decodeURIComponent(params.get(key));
     }
+  }
+  if (params.has(LEGACY_CONTACT_KEY) && !params.has(URL_KEYS["contact-from-back"])) {
+    const vals = readInputs();
+    const legacyOffset = parseFloat(params.get(LEGACY_CONTACT_KEY)) || 0;
+    document.getElementById("contact-from-back").value =
+      contactFromSeatBack(legacyOffset, vals["seat-depth"], vals["seat-rear-overhang"]);
   }
   const view = params.get(VIEW_URL_KEY);
   if (VIEW_MODES.includes(view)) {
@@ -503,7 +541,8 @@ function update(updateURL = true) {
     seatDepth: vals["seat-depth"],
     backrestAngle: vals["backrest-angle"],
     chairWeight: vals["chair-weight"],
-    contactOffset: vals["contact-offset"],
+    contactOffset: toContactOffset(vals),
+    seatRearOverhang: vals["seat-rear-overhang"],
     sitterWeight: vals["sitter-weight"],
     sitterHeight: vals["sitter-height"],
     sitterGender: vals["sitter-gender"],
@@ -512,6 +551,7 @@ function update(updateURL = true) {
   });
 
   renderInfo();
+  syncRestAngle();
   // Draw a level first frame; the caller decides how to animate from here.
   currentFall = null;
   renderDiagram(0);
@@ -519,6 +559,64 @@ function update(updateURL = true) {
   if (updateURL) {
     pushURL();
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Backrest angle at rest                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Show the backrest's resting angle in its field.  Left alone while the
+ * field is being typed in, so a half-typed target is not overwritten.
+ */
+function syncRestAngle() {
+  const el = document.getElementById(REST_ANGLE_ID);
+  if (!el || document.activeElement === el) {
+    return;
+  }
+  const angle = currentModel?.restBackrestAngle;
+  el.value = angle === null || angle === undefined ? "" : angle.toFixed(1);
+}
+
+/**
+ * A target resting angle was typed in: move the contact point to the
+ * spot that gives it, if that spot is somewhere between the legs.
+ */
+function applyRestAngleTarget() {
+  const el = document.getElementById(REST_ANGLE_ID);
+  const target = parseFloat(el.value);
+  if (!currentModel || !Number.isFinite(target)) {
+    return;
+  }
+  const vals = readInputs();
+  const offset = contactOffsetForRestAngle(currentModel, target);
+  if (offset === null) {
+    setError(REST_ANGLE_ID, "Chair cannot rest");
+    return;
+  }
+  const fromBack = contactFromSeatBack(offset, vals["seat-depth"], vals["seat-rear-overhang"]);
+  if (!contactBetweenLegs(fromBack, vals)) {
+    setError(REST_ANGLE_ID, `Needs the contact point ${fromBack.toFixed(1)} in from the seat back, outside the legs`);
+    return;
+  }
+  const contactEl = document.getElementById("contact-from-back");
+  contactEl.value = fromBack.toFixed(2).replace(/\.?0+$/, "");
+  const prevTheta = currentTheta;
+  update();
+  applyView(prevTheta);
+  if (currentModel?.fallDirection) {
+    setError(REST_ANGLE_ID, "Chair tips over at this angle");
+  }
+}
+
+function wireRestAngle() {
+  const el = document.getElementById(REST_ANGLE_ID);
+  if (!el) {
+    return;
+  }
+  el.addEventListener("input", applyRestAngleTarget);
+  // Once typing is finished, show the angle the chair actually rests at
+  el.addEventListener("blur", syncRestAngle);
 }
 
 /* ------------------------------------------------------------------ */
@@ -566,6 +664,7 @@ function init() {
   }
 
   wireSteppers();
+  wireRestAngle();
   wireDetailsToggle();
 
   document.getElementById("sitter-height").addEventListener("input", updateHeightDisplay);

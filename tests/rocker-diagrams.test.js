@@ -593,10 +593,17 @@ describe('renderInfoPanel', () => {
     expect(renderInfoPanel(doc, back).textContent).toMatch(/Natural tilt\d+\.\d°/);
   });
 
-  it('includes CoG fore/aft offset info', () => {
-    const dl = renderInfoPanel(doc, model);
-    const text = dl.textContent;
-    expect(text).toContain('CoG fore/aft offset');
+  it('reports the load centre from the back of the seat', () => {
+    const text = renderInfoPanel(doc, model).textContent;
+    // Seat centre is 8 in ahead of the backrest line, plus 1 in of overhang
+    expect(text).toContain(`Load centre${(model.cogOffsetX + 9).toFixed(1)} in from seat back`);
+  });
+
+  it('reports the backrest angle at rest', () => {
+    const text = renderInfoPanel(doc, model).textContent;
+    expect(text).toContain(`Backrest at rest${model.restBackrestAngle.toFixed(1)}° from floor`);
+    const unstable = buildRockerModel({ ...defaults, radius: 20 });
+    expect(renderInfoPanel(doc, unstable).textContent).toContain('Backrest at rest—');
   });
 
   it('reports how much the feet carry', () => {
@@ -738,8 +745,9 @@ describe('contact point fore/aft', () => {
     const g = renderChairProfile(doc, shifted(), 0);
     const seat = Array.from(g.querySelectorAll('line')).find(l => l.getAttribute('stroke') === '#A0845E');
     const xs = [parseFloat(seat.getAttribute('x1')), parseFloat(seat.getAttribute('x2'))].sort((a, b) => a - b);
-    // Seat spans −4 … +12 in (centre at +4), contact dot stays at 0
-    expect(xs[0]).toBeCloseTo(-4 * 4, 3);
+    // Seat spans −4 … +12 in (centre at +4) plus the 1 in rear overhang
+    // behind the backrest; the contact dot stays at 0
+    expect(xs[0]).toBeCloseTo(-5 * 4, 3);
     expect(xs[1]).toBeCloseTo(12 * 4, 3);
     const dot = g.querySelector('[data-testid="contact-point"] circle');
     expect(parseFloat(dot.getAttribute('cx'))).toBeCloseTo(0, 3);
@@ -784,12 +792,21 @@ describe('contact point fore/aft', () => {
     expect(parseFloat(ln.getAttribute('x2'))).toBeCloseTo(4 * 4, 3);
   });
 
-  it('reports the contact point and leg lengths in the info panel', () => {
+  it('draws the seat overhang the model was given', () => {
+    const m = buildRockerModel({ ...defaults, contactOffset: -4, seatRearOverhang: 2.5 });
+    const g = renderChairProfile(doc, m, 0);
+    const seat = Array.from(g.querySelectorAll('line')).find(l => l.getAttribute('stroke') === '#A0845E');
+    const xs = [parseFloat(seat.getAttribute('x1')), parseFloat(seat.getAttribute('x2'))].sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(-6.5 * 4, 3);
+  });
+
+  it('reports the contact point from the seat back and the leg lengths in the info panel', () => {
     const m = shifted();
     const text = renderInfoPanel(doc, m).textContent;
-    expect(text).toContain('Contact point4.0 in behind seat centre');
+    // 4 in behind the seat centre = 4 in ahead of the backrest line = 5 in from the rear edge
+    expect(text).toContain('Contact point5.0 in from seat back');
     expect(text).toContain(`Rear leg length${m.legLengths.rear.toFixed(1)} in`);
     expect(text).toContain(`Front leg length${m.legLengths.front.toFixed(1)} in`);
-    expect(renderInfoPanel(doc, model).textContent).toContain('Contact point0.0 in (under seat centre)');
+    expect(renderInfoPanel(doc, model).textContent).toContain('Contact point9.0 in from seat back');
   });
 });
